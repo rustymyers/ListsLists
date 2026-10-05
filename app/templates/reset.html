@@ -1,0 +1,1 @@
+{% extends "base.html" %}{% block content %}<section class="card narrow"><h1>Choose a new password</h1><form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><label>New password<input type="password" name="password" minlength="12" required></label><button>Change password</button></form></section>{% endblock %}

@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}ListsLists{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
+</head>
+<body>
+<header><a class="brand" href="/">ListsLists</a><nav>{% if user %}<a href="/">Lists</a>{% if user.is_admin %}<a href="/admin">Admin</a>{% endif %}<form method="post" action="/logout" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="link">Log out</button></form>{% endif %}<a href="/docs">API</a></nav></header>
+<main>{% block content %}{% endblock %}</main>
+<footer>ListsLists v1 · Self-hosted contextual lists</footer>
+</body></html>
