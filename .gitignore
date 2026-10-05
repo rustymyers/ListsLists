@@ -9,3 +9,4 @@ data/
 secrets/
 *.db
 *.pyc
+.DS_Store
