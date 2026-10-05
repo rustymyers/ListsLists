@@ -1,0 +1,208 @@
+ListsLists
+
+ListsLists is a self-hosted FastAPI web application for creating, organizing, sharing, calculating, and exporting contextual lists.
+
+A list contains ordered list items. Each item contains descriptive and operational attributes such as quantity, category, tags, storage location, usage context, requirements, dependencies, and notes. An item may also reference another reusable list, allowing users to construct larger lists from smaller component lists.
+
+Referenced lists remain independently managed. When a parent list is viewed or exported, the application resolves its referenced lists and combines their items according to configurable rules. Circular list references must be detected and rejected.
+
+Core functionality
+
+Users must be able to:
+
+Create, view, edit, duplicate, archive, and delete lists.
+Add, edit, reorder, copy, move, and remove items.
+Reference another list from a list item.
+Define quantities, categories, tags, locations, requirements, and dependencies.
+Search and filter lists and items.
+Preview the fully resolved contents of a list.
+Export resolved lists in configurable formats.
+Share lists with individual users.
+Assign viewer or editor permissions.
+make lists private, shared, public, or unlisted.
+Revoke previously granted access.
+View changes through an audit history.
+Resolution and export behavior
+
+When resolving a list, the application must recursively process referenced lists and produce a flattened result without modifying the source lists.
+
+The resolution process must support configurable rules for:
+
+Detecting and merging duplicate items
+Combining quantities
+Expanding dependencies
+Including or excluding optional items
+Grouping by category
+Sorting
+Preserving source-list information
+Handling conflicting attributes
+Applying user-defined calculations
+
+Users should be able to save reusable export profiles. The initial export formats should be identified before implementation.
+
+Data model
+
+Each list should include:
+
+Stable UUID
+Human-readable name
+Unique URL slug
+Description
+Owner
+Visibility
+Default sort configuration
+Created and modified timestamps
+Archived or deleted status
+
+Each list item should include:
+
+Stable UUID
+Name
+Description
+Quantity
+Unit
+Category
+Tags
+Storage location
+Usage context
+Required or optional status
+Notes
+Sort position
+Reference to a nested list, when applicable
+Dependencies or conditional requirements
+Created and modified timestamps
+
+The application should support custom metadata fields without requiring database schema changes for every new user-defined attribute.
+
+Permissions
+
+Lists should support the following access roles:
+
+Owner
+Editor
+Contributor, if included in the initial release
+Viewer
+Public viewer
+
+Permissions must be checked for every HTML and API request. The application must prevent a public or shared list from unintentionally exposing inaccessible nested lists.
+
+The expected behavior for nested-list permissions must be explicitly defined before implementation.
+
+Authentication
+
+The application should support configurable authentication modes:
+
+Local application authentication
+Trusted reverse-proxy authentication for Authelia
+
+Local passwords must be securely hashed. Password reset tokens must be single use, time limited, and securely generated.
+
+In proxy mode, identity headers must only be accepted from configured trusted proxies. The application must define how proxy identities are mapped to local user records.
+
+Initial administrator
+
+On first startup, if no user accounts exist, the application should create a bootstrap administrator account.
+
+The initial credential may be supplied through a secret or generated automatically. If generated, it should be written to a protected local secrets file and require a password change at first login. It should not be embedded in the container image or repeatedly exposed in application logs.
+
+Administration
+
+Administrators should be able to:
+
+Create and disable users
+Reset local-user passwords
+Assign or revoke administrator access
+Review audit events
+Configure selected application settings
+Test email delivery
+View basic application and database health information
+
+Administrative password resets should either issue a temporary password that must be changed or send a time-limited reset link.
+
+URLs and API
+
+Every list and item should have stable browser and API URLs.
+
+The application should provide:
+
+Server-rendered forms or an explicitly selected frontend
+A versioned REST API
+OpenAPI documentation
+UUID-based resource identifiers
+Human-readable browser slugs
+API authentication
+Pagination, filtering, and sorting
+CSRF protection for form submissions
+Authorization checks at both route and service layers
+Email
+
+The service should send email from a centrally configured address through SMTP.
+
+Email should support:
+
+Password reset
+List-sharing invitations
+Optional security notifications
+Administrative test messages
+
+SMTP credentials should be supplied through secrets rather than stored in the database or source repository.
+
+Deployment
+
+The initial deployment should include:
+
+Container image
+Podman Compose configuration
+Persistent application-data volume
+Persistent secrets location
+Database migrations
+Health endpoint
+Environment-variable configuration
+Backup and restore documentation
+Automated tests for authentication, authorization, nesting, cycle detection, and exports
+Inputs to decide before generating the build prompt
+
+make version 1 include:
+
+FastAPI
+Server-rendered templates with HTMX
+PostgreSQL, with optional SQLite for development
+Local authentication plus a configurable Authelia proxy mode
+Private, shared, unlisted, and public lists
+Owner, editor, and viewer roles
+Reusable nested-list references
+Cycle detection
+Tags, categories, quantity, location, notes, and required/optional status
+Simple item-to-item dependencies
+Flattened export to JSON and CSV
+Duplicate merging by stable item identity
+SMTP password resets
+Audit log
+Podman Compose deployment
+Tests and migrations
+
+I would defer a graphical rule builder, organization-level multi-tenancy, complex formulas, OAuth provider mode, PDF generation, and real-time collaborative editing until the list-resolution model is proven.
+
+The following decisions will materially affect the architecture:
+
+Frontend: Server-rendered Jinja and HTMX, or a separate JavaScript frontend?
+Database: PostgreSQL , or support both?
+Deployment: Podman Compose, Kubernetes, or direct Python installation?
+Nesting method: Reference reusable lists, copy their items, or offer both?
+Permissions: Which roles are required for the first version?
+Public access: Fully public, unlisted links, or both?
+Nested permissions: Hide, reject, or partially resolve inaccessible child lists?
+Duplicate identity: UUID, exact normalized name, SKU, or user-selected matching field?
+Dependency rules: Simple required-item links or a full conditional rule system?
+Export formats: Which formats are required for the first release?
+Custom fields: Per list, global, template-based, or postponed?
+Authentication: Local, Authelia, or both selectable at deployment time?
+API clients: Session authentication, personal API tokens, OAuth, or some combination?
+Versioning: Do lists need revision history or immutable export snapshots?
+Email: Is SMTP always available, or must password reset work without it?
+Multi-tenancy: Is this one shared installation, or should organizations/workspaces be isolated?
+Scale: Approximate users, lists, items per list, and nesting depth?
+Import: Should CSV or JSON import be included in the first release?
+Recommended first-release boundary
+
+To keep the first AI-generated build manageable, I would 

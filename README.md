@@ -1,0 +1,166 @@
+# ListsLists
+
+ListsLists is a self-hosted FastAPI application for creating, organizing, sharing, resolving, and exporting contextual lists. Version 1 uses server-rendered Jinja templates enhanced with HTMX, PostgreSQL in production, and SQLite for local development.
+
+## Version 1 scope
+
+Implemented:
+
+- Stable UUIDs and human-readable list slugs
+- Private, shared, unlisted, and public lists
+- Owner, editor, and viewer access
+- Ordered items with quantities, units, categories, tags, location, context, notes, required/optional state, JSON custom metadata, and simple dependencies
+- Reusable nested-list references with write-time and resolution-time cycle detection
+- Read-only recursive flattening, optional-item filtering, duplicate merging, quantity combination, sorting, source preservation, conflict strategies, and a safe quantity multiplier/rounding calculation
+- JSON and UTF-8 CSV export; reusable export profiles
+- Search/filter APIs, pagination, item copy/move/reorder, list duplication/archive/soft-delete, shares and revocation
+- Local Argon2 password authentication, signed browser sessions, bearer JWTs, single-use expiring reset tokens, and trusted-proxy identity mode for Authelia
+- CSRF protection on HTML form posts and route/service permission checks
+- Audit events, bootstrap administration, user management, SMTP tests, and health endpoints
+- Alembic migration, Podman Compose, backup/restore instructions, and automated security/resolution tests
+
+Deferred: graphical rule builder, organization multi-tenancy, arbitrary formulas, OAuth providers, PDF export, and real-time co-editing.
+
+## Nested-list permission policy (security decision)
+
+ListsLists uses **strict non-inheritance**:
+
+1. Access to a parent does not grant access to a nested list.
+2. During preview or export, the acting user must independently be able to view every referenced list. A public nested list is viewable by anyone; otherwise the user must be its owner, administrator, or explicit viewer/editor.
+3. Unlisted-link access applies only to the root browser URL. It is not inherited while traversing references. Therefore, a public or unlisted parent cannot silently expose a private, shared, or merely-unlisted child.
+4. If any nested list is inaccessible, resolution fails as a whole with a generic 403. Partial results and the inaccessible list's identity are not returned; item read APIs also suppress inaccessible nested UUIDs.
+5. Editors may create or move a reference only when they can independently view the target. Consumers must still have independent read access at resolution time, so later revocation takes effect immediately.
+
+This conservative model prevents accidental disclosure. A future release could add explicit, auditable snapshot or delegated-inclusion modes.
+
+## Export formats chosen for v1
+
+- **JSON:** lossless structured output with list metadata, arrays for tags and source IDs, and custom metadata objects.
+- **CSV:** spreadsheet-friendly flattened rows. Multi-value fields are semicolon-delimited; custom metadata is compact JSON.
+
+Exports never mutate source lists. Duplicate identity is `identity_key` when explicitly supplied, otherwise the item's stable UUID. Repeated paths to the same reusable item therefore merge reliably. Quantity merging refuses incompatible units. Conflict handling can keep the first record, keep the last, or fail.
+
+## Quick start with Podman Compose
+
+```bash
+cp .env.example .env
+# Edit .env and set strong POSTGRES_PASSWORD and LISTSLISTS_SECRET_KEY values.
+podman compose up -d --build
+```
+
+Open `http://localhost:8000`. On the very first startup, if no accounts exist:
+
+- If `LISTSLISTS_BOOTSTRAP_ADMIN_PASSWORD` is set, that value is used once.
+- Otherwise a random password is written once to the protected `app_secrets` volume at `/secrets/initial-admin.txt` and the account must change it after login.
+- The password is never embedded in the image or logged repeatedly.
+
+Read a generated credential without copying it into logs:
+
+```bash
+podman compose exec app cat /secrets/initial-admin.txt
+```
+
+Delete that file after changing the password.
+
+## Local development
+
+Requires Python 3.12+.
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+pip install -e '.[dev]'
+mkdir -p data secrets
+export LISTSLISTS_ENVIRONMENT=development
+export LISTSLISTS_DATABASE_URL=sqlite:///./data/listslists.db
+export LISTSLISTS_SECRET_KEY='development-secret-change-me'
+alembic upgrade head
+uvicorn app.main:app --reload
+```
+
+Run verification:
+
+```bash
+pytest
+ruff check app tests
+```
+
+## Authentication
+
+### Local mode
+
+Set `LISTSLISTS_AUTH_MODE=local`. Passwords are Argon2-hashed. Form sessions use a signed, HTTP-only cookie. Set `LISTSLISTS_SESSION_HTTPS_ONLY=true` behind HTTPS. API clients obtain a time-limited bearer token:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/token \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'username=admin&password=YOUR_PASSWORD'
+```
+
+### Authelia / trusted reverse-proxy mode
+
+Set `LISTSLISTS_AUTH_MODE=proxy` or `both`, configure `LISTSLISTS_TRUSTED_PROXY_CIDRS`, and have the proxy set `Remote-User` and optionally `Remote-Email`. Headers are ignored unless the immediate peer address is in a configured network. Never put the app directly on an untrusted network in proxy mode.
+
+Identity mapping is deterministic: `Remote-User` case-insensitively matches the local `username`. If enabled, first contact creates a non-admin local record with `auth_source=proxy`; `Remote-Email` is used when present. Renaming an upstream identity does not automatically merge accounts.
+
+Example Authelia proxy headers:
+
+```nginx
+proxy_set_header Remote-User $upstream_http_remote_user;
+proxy_set_header Remote-Email $upstream_http_remote_email;
+proxy_pass http://listslists:8000;
+```
+
+Only trust proxy CIDRs you control. Also set Uvicorn's forwarded-IP allow list through `LISTSLISTS_FORWARDED_ALLOW_IPS` where appropriate.
+
+## API and browser URLs
+
+- OpenAPI UI: `/docs`
+- OpenAPI JSON: `/openapi.json`
+- Browser list URL: `/l/{slug}`
+- API list URL: `/api/v1/lists/{uuid}`
+- API item URL: `/api/v1/items/{uuid}` (mutation routes)
+- Health: `/healthz`
+
+Collection endpoints accept bounded `limit` and `offset`; list/item searches support `q`, categories, tags, and archive state. Full request models and examples are visible in OpenAPI.
+
+## SMTP and secrets
+
+Configure SMTP only through environment values or an external container secret injector. SMTP credentials are never stored in the database. Password-reset links are random, SHA-256-hashed at rest, single-use, and expire after `LISTSLISTS_PASSWORD_RESET_MINUTES` (30 by default).
+
+Production secret recommendations:
+
+- Inject `LISTSLISTS_SECRET_KEY`, database password, SMTP password, and optional bootstrap password using your orchestrator's secret facility.
+- Do not commit `.env`.
+- Mount `/secrets` on persistent storage with owner-only permissions.
+- Rotate the application secret deliberately: existing sessions and API tokens will be invalidated.
+
+## Backup and restore
+
+### PostgreSQL
+
+```bash
+./scripts/backup.sh ./backups
+podman compose down
+./scripts/restore.sh ./backups/listslists-YYYYMMDD-HHMMSS.sql.gz
+# Restore the app_data and app_secrets archives produced with the same timestamp.
+podman compose up -d
+```
+
+Backups contain sensitive data. Encrypt them, restrict access, copy them off-host, and test restores. See script comments for exact behavior. Back up the database, `/data`, and `/secrets` as one recovery set.
+
+### SQLite development
+
+Stop the app and copy `data/listslists.db`, `data/`, and `secrets/`. Do not copy a live SQLite file without using SQLite's online backup mechanism.
+
+## Operational notes
+
+- Run migrations before every release (`alembic upgrade head`); the container entrypoint does this automatically.
+- `/healthz` verifies database connectivity and returns 503 when degraded.
+- Audit data is append-only through the application but should also be protected at the database and backup layers.
+- Soft-deleted lists are hidden. A future retention job may purge them after policy review.
+- Rate limiting, malware scanning for future uploads, and centralized observability should be added at the reverse proxy/platform layer before Internet exposure.
+
+## License
+
+No license has been selected. Add one before public distribution.
