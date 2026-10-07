@@ -6,7 +6,6 @@ __pycache__/
 .coverage
 htmlcov/
 data/
-secrets/
 *.db
 *.pyc
 .DS_Store

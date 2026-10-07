@@ -7,4 +7,4 @@ echo "WARNING: this replaces the current listslists database. Stop app traffic f
 podman compose exec -T db dropdb -U listslists --if-exists listslists
 podman compose exec -T db createdb -U listslists listslists
 gzip -dc "$BACKUP" | podman compose exec -T db psql -U listslists -d listslists
-echo "Database restored. Restore matching app-data/app-secrets archives manually, then run migrations."
+echo "Database restored. Restore the matching app-data archive manually, then run migrations."

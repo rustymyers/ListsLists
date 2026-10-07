@@ -15,7 +15,6 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./data/listslists.db"
     public_base_url: str = "http://localhost:8000"
     data_dir: Path = Path("./data")
-    secrets_dir: Path = Path("./secrets")
 
     auth_mode: Literal["local", "proxy", "both"] = "local"
     proxy_user_header: str = "Remote-User"
@@ -47,8 +46,6 @@ class Settings(BaseSettings):
 
     def ensure_directories(self) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.secrets_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-        self.secrets_dir.chmod(0o700)
 
 
 @lru_cache

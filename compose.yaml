@@ -14,7 +14,6 @@ services:
       LISTSLISTS_SECRET_KEY: ${LISTSLISTS_SECRET_KEY:?set LISTSLISTS_SECRET_KEY}
       LISTSLISTS_PUBLIC_BASE_URL: ${LISTSLISTS_PUBLIC_BASE_URL:-http://localhost:8000}
       LISTSLISTS_DATA_DIR: /data
-      LISTSLISTS_SECRETS_DIR: /secrets
       LISTSLISTS_AUTH_MODE: ${LISTSLISTS_AUTH_MODE:-local}
       LISTSLISTS_BOOTSTRAP_ADMIN_PASSWORD: ${LISTSLISTS_BOOTSTRAP_ADMIN_PASSWORD:-}
       LISTSLISTS_TRUSTED_PROXY_CIDRS: ${LISTSLISTS_TRUSTED_PROXY_CIDRS:-}
@@ -26,7 +25,6 @@ services:
       LISTSLISTS_MAIL_FROM: ${LISTSLISTS_MAIL_FROM:-listslists@localhost.local}
     volumes:
       - app_data:/data
-      - app_secrets:/secrets
   db:
     image: postgres:17-alpine
     restart: unless-stopped
@@ -42,5 +40,4 @@ services:
       retries: 10
 volumes:
   app_data:
-  app_secrets:
   postgres_data:

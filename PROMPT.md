@@ -103,7 +103,7 @@ Initial administrator
 
 On first startup, if no user accounts exist, the application should create a bootstrap administrator account.
 
-The initial credential may be supplied through a secret or generated automatically. If generated, it should be written to a protected local secrets file and require a password change at first login. It should not be embedded in the container image or repeatedly exposed in application logs.
+The initial administrator password must be configured through `LISTSLISTS_BOOTSTRAP_ADMIN_PASSWORD` in the environment configuration file. Startup must fail if no accounts exist and this password is not configured. The password must not be written to a separate generated file or exposed in application logs.
 
 Administration
 

@@ -7,7 +7,7 @@ COPY app ./app
 COPY migrations ./migrations
 COPY alembic.ini ./
 COPY scripts/entrypoint.sh /entrypoint.sh
-RUN pip install --no-cache-dir . && chmod +x /entrypoint.sh && mkdir -p /data /secrets && chown -R app:app /app /data /secrets
+RUN pip install --no-cache-dir . && chmod +x /entrypoint.sh && mkdir -p /data && chown -R app:app /app /data
 USER app
 EXPOSE 8000
 ENTRYPOINT ["/entrypoint.sh"]

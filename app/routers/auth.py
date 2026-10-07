@@ -28,7 +28,12 @@ def login(request: Request, db: Db, username: str = Form(), password: str = Form
     if not user or not user.is_active or not verify_password(password, user.password_hash):
         record_event(db, "auth.login_failed", "user", user.id if user else None, user, {"username": username}, request.client.host if request.client else None)
         db.commit()
-        raise HTTPException(401, detail="Invalid credentials")
+        return request.app.state.templates.TemplateResponse(
+            request,
+            "login.html",
+            {"username": username, "error": "Invalid credentials"},
+            status_code=401,
+        )
     request.session.clear()
     request.session["user_id"] = user.id
     record_event(db, "auth.login", "user", user.id, user, ip_address=request.client.host if request.client else None)

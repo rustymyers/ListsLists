@@ -44,23 +44,16 @@ Exports never mutate source lists. Duplicate identity is `identity_key` when exp
 
 ```bash
 cp .env.example .env
-# Edit .env and set strong POSTGRES_PASSWORD and LISTSLISTS_SECRET_KEY values.
+# Edit .env and replace all placeholders, including POSTGRES_PASSWORD,
+# LISTSLISTS_SECRET_KEY, and LISTSLISTS_BOOTSTRAP_ADMIN_PASSWORD.
 podman compose up -d --build
 ```
 
 Open `http://localhost:8000`. On the very first startup, if no accounts exist:
 
-- If `LISTSLISTS_BOOTSTRAP_ADMIN_PASSWORD` is set, that value is used once.
-- Otherwise a random password is written once to the protected `app_secrets` volume at `/secrets/initial-admin.txt` and the account must change it after login.
-- The password is never embedded in the image or logged repeatedly.
-
-Read a generated credential without copying it into logs:
-
-```bash
-podman compose exec app cat /secrets/initial-admin.txt
-```
-
-Delete that file after changing the password.
+- Set `LISTSLISTS_BOOTSTRAP_ADMIN_PASSWORD` in `.env`; it is used for the initial administrator account.
+- Startup fails with a clear error if no account exists and the password is not configured.
+- The configured password is not logged or written to a separate file.
 
 ## Local development
 
@@ -70,7 +63,7 @@ Requires Python 3.12+.
 python -m venv .venv
 . .venv/bin/activate
 pip install -e '.[dev]'
-mkdir -p data secrets
+mkdir -p data
 export LISTSLISTS_ENVIRONMENT=development
 export LISTSLISTS_DATABASE_URL=sqlite:///./data/listslists.db
 export LISTSLISTS_SECRET_KEY='development-secret-change-me'
@@ -83,6 +76,20 @@ Run verification:
 ```bash
 pytest
 ruff check app tests
+```
+
+Reset Containers:
+
+```bash
+podman compose down --volumes --remove-orphans
+```
+
+### Logs
+
+Get logs from the app quickly with:
+
+```bash
+podman compose logs app
 ```
 
 ## Authentication
@@ -130,9 +137,8 @@ Configure SMTP only through environment values or an external container secret i
 
 Production secret recommendations:
 
-- Inject `LISTSLISTS_SECRET_KEY`, database password, SMTP password, and optional bootstrap password using your orchestrator's secret facility.
+- Inject `LISTSLISTS_SECRET_KEY`, database password, and SMTP password using your orchestrator's secret facility. Configure `LISTSLISTS_BOOTSTRAP_ADMIN_PASSWORD` in `.env` before the first startup.
 - Do not commit `.env`.
-- Mount `/secrets` on persistent storage with owner-only permissions.
 - Rotate the application secret deliberately: existing sessions and API tokens will be invalidated.
 
 ## Backup and restore
@@ -143,15 +149,15 @@ Production secret recommendations:
 ./scripts/backup.sh ./backups
 podman compose down
 ./scripts/restore.sh ./backups/listslists-YYYYMMDD-HHMMSS.sql.gz
-# Restore the app_data and app_secrets archives produced with the same timestamp.
+# Restore the app_data archive produced with the same timestamp.
 podman compose up -d
 ```
 
-Backups contain sensitive data. Encrypt them, restrict access, copy them off-host, and test restores. See script comments for exact behavior. Back up the database, `/data`, and `/secrets` as one recovery set.
+Backups contain sensitive data. Encrypt them, restrict access, copy them off-host, and test restores. See script comments for exact behavior. Back up the database and `/data` as one recovery set.
 
 ### SQLite development
 
-Stop the app and copy `data/listslists.db`, `data/`, and `secrets/`. Do not copy a live SQLite file without using SQLite's online backup mechanism.
+Stop the app and copy `data/listslists.db` and `data/`. Do not copy a live SQLite file without using SQLite's online backup mechanism.
 
 ## Operational notes
 
