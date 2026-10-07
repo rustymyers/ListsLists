@@ -62,6 +62,39 @@ def list_detail(request: Request, db: Db, user: OptionalUser, slug: str):
     if not obj:
         raise HTTPException(404, detail="List not found")
     require_view(db, user, obj, allow_unlisted=True)
+    referenced_list_ids = {
+        item.referenced_list_id for item in obj.items if item.is_required and item.referenced_list_id
+    }
+    visible_referenced_lists = {
+        candidate.id: candidate
+        for candidate in db.scalars(
+            select(ListModel).where(
+                ListModel.id.in_(referenced_list_ids),
+                ListModel.deleted_at.is_(None),
+            )
+        ).all()
+        if can_view(db, user, candidate, allow_unlisted=False)
+    }
+    required_by_list_ids = (
+        select(ListItem.list_id)
+        .where(
+            ListItem.referenced_list_id == obj.id,
+            ListItem.is_required.is_(True),
+        )
+        .distinct()
+    )
+    required_by_lists = [
+        candidate
+        for candidate in db.scalars(
+            select(ListModel)
+            .where(
+                ListModel.id.in_(required_by_list_ids),
+                ListModel.deleted_at.is_(None),
+            )
+            .order_by(ListModel.name)
+        ).all()
+        if can_view(db, user, candidate, allow_unlisted=False)
+    ]
     available_lists = []
     if can_edit(db, user, obj):
         available_lists = [
@@ -83,6 +116,8 @@ def list_detail(request: Request, db: Db, user: OptionalUser, slug: str):
             "can_edit": can_edit(db, user, obj),
             "can_manage": can_manage(db, user, obj),
             "available_lists": available_lists,
+            "visible_referenced_lists": visible_referenced_lists,
+            "required_by_lists": required_by_lists,
         },
     )
 
@@ -161,7 +196,19 @@ def add_item(request: Request, db: Db, user: CurrentUser, slug: str, name: str =
     record_event(db, "item.create", "item", item.id, user, {"list_id": obj.id})
     db.commit()
     if request.headers.get("HX-Request"):
-        return render(request, "item_row.html", {"item": item, "list": obj, "can_edit": True})
+        visible_referenced_lists = (
+            {item.referenced_list_id: item.referenced_list} if item.referenced_list_id else {}
+        )
+        return render(
+            request,
+            "item_row.html",
+            {
+                "item": item,
+                "list": obj,
+                "can_edit": True,
+                "visible_referenced_lists": visible_referenced_lists,
+            },
+        )
     return RedirectResponse(f"/l/{slug}", 303)
 
 

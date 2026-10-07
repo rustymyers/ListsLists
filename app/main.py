@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -51,8 +51,19 @@ def healthz():
         return JSONResponse({"status": "degraded", "database": "error"}, status_code=503)
 
 
-@app.exception_handler(403)
-async def forbidden(request: Request, exc):
+@app.exception_handler(HTTPException)
+async def http_error(request: Request, exc: HTTPException):
     if request.url.path.startswith("/api/"):
-        return JSONResponse({"detail": str(exc.detail)}, status_code=403)
-    return templates.TemplateResponse(request, "error.html", {"status": 403, "message": str(exc.detail)}, status_code=403)
+        return JSONResponse({"detail": str(exc.detail)}, status_code=exc.status_code)
+    context = {"status": exc.status_code, "message": str(exc.detail)}
+    if request.headers.get("HX-Request"):
+        response = templates.TemplateResponse(
+            request,
+            "error_status.html",
+            context,
+            status_code=exc.status_code,
+        )
+        response.headers["HX-Retarget"] = "#page-status"
+        response.headers["HX-Reswap"] = "outerHTML"
+        return response
+    return templates.TemplateResponse(request, "error.html", context, status_code=exc.status_code)

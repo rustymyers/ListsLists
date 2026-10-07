@@ -8,6 +8,36 @@
     if (status) status.textContent = message;
   };
 
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest(".sort-header");
+    if (!button) return;
+    const table = button.closest("table");
+    const body = table.querySelector("tbody");
+    const key = button.dataset.sortKey;
+    const direction =
+      body.dataset.sortKey === key && body.dataset.sortDirection === "asc" ? "desc" : "asc";
+    const multiplier = direction === "asc" ? 1 : -1;
+    const rows = itemRows(body);
+
+    rows.sort((left, right) => {
+      const leftValue = left.querySelector(`[data-sort-value][data-sort-key="${key}"]`);
+      const rightValue = right.querySelector(`[data-sort-value][data-sort-key="${key}"]`);
+      const leftSortValue = leftValue?.dataset.sortValue ?? "";
+      const rightSortValue = rightValue?.dataset.sortValue ?? "";
+      if (key === "quantity") return multiplier * (Number(leftSortValue) - Number(rightSortValue));
+      return multiplier * leftSortValue.localeCompare(rightSortValue, undefined, {numeric: true});
+    });
+
+    rows.forEach((row) => body.append(row));
+    body.dataset.sortKey = key;
+    body.dataset.sortDirection = direction;
+    table.querySelectorAll(".sort-header").forEach((header) => {
+      header.closest("th").ariaSort =
+        header === button ? (direction === "asc" ? "ascending" : "descending") : "none";
+    });
+    setStatus(`Items sorted by ${button.textContent} in ${direction}ending order.`);
+  });
+
   document.addEventListener("dragstart", (event) => {
     if (!event.target.closest(".drag-handle")) return;
     const body = event.target.closest("tbody[data-reorder-url]");

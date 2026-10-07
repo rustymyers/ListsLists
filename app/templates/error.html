@@ -1,1 +1,1 @@
-{% extends "base.html" %}{% block content %}<section class="card"><h1>{{ status }}</h1><p>{{ message }}</p></section>{% endblock %}
+{% extends "base.html" %}{% block content %}<section class="card status-error" role="alert"><p class="status-code">Error {{ status }}</p><h1>We could not complete that request</h1><p>{{ message }}</p></section>{% endblock %}

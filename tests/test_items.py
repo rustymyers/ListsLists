@@ -14,6 +14,23 @@ def test_item_reorder_copy_move_and_delete(client, admin_headers):
     assert client.delete(f"/api/v1/items/{a['id']}", headers=admin_headers).status_code == 204
 
 
+def test_list_page_shows_drag_handles_for_editors(client, admin_headers):
+    list_data = client.post(
+        "/api/v1/lists", headers=admin_headers, json={"name": "Ordered"}
+    ).json()
+    client.post(
+        f"/api/v1/lists/{list_data['id']}/items",
+        headers=admin_headers,
+        json={"name": "First"},
+    )
+    page = client.get(f"/l/{list_data['slug']}", headers=admin_headers)
+
+    assert 'data-reorder-url="/api/v1/lists/' in page.text
+    assert 'class="drag-handle"' in page.text
+    assert 'class="sort-header" type="button" data-sort-key="name"' in page.text
+    assert 'class="sort-header" type="button" data-sort-key="quantity"' in page.text
+
+
 def test_web_add_item_returns_and_persists_item_row(client, admin_headers):
     list_data = client.post(
         "/api/v1/lists", headers=admin_headers, json={"name": "Groceries"}
@@ -84,6 +101,12 @@ def test_web_add_required_list_and_reject_cycle(client, admin_headers):
         follow_redirects=False,
     )
     assert response.status_code == 303
+    page = client.get(f"/l/{parent['slug']}", headers=admin_headers)
+    assert 'data-sort-key="required-list"' in page.text
+    assert f'<a href="/l/{child["slug"]}">{child["name"]}</a>' in page.text
+    page = client.get(f"/l/{child['slug']}", headers=admin_headers)
+    assert "<h2>Required by</h2>" in page.text
+    assert f'<a href="/l/{parent["slug"]}">{parent["name"]}</a>' in page.text
 
     page = client.get(f"/l/{child['slug']}", headers=admin_headers)
     csrf_token = re.search(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
@@ -93,3 +116,5 @@ def test_web_add_required_list_and_reject_cycle(client, admin_headers):
         headers=admin_headers,
     )
     assert response.status_code == 409
+    assert '<section class="card status-error" role="alert">' in response.text
+    assert "This reference would create a circular list graph" in response.text
