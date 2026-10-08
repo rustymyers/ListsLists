@@ -1,1 +1,42 @@
-{% extends "base.html" %}{% block content %}<div class="heading"><div><h1>Resolved: {{ list.name }}</h1><p>Flattened without modifying source lists.</p></div><div class="actions"><a class="button secondary" href="/l/{{ list.slug }}/export/json">JSON</a><a class="button secondary" href="/l/{{ list.slug }}/export/csv">CSV</a><a class="button secondary" href="/l/{{ list.slug }}">Back</a></div></div><section class="card"><div class="table-wrap"><table><thead><tr><th>Item</th><th>Quantity</th><th>Category</th><th>Location</th><th>Source list(s)</th></tr></thead><tbody>{% for row in rows %}<tr><td><strong>{{ row.name }}</strong><small>{{ row.notes }}</small></td><td>{{ row.quantity }} {{ row.unit }}</td><td>{{ row.category or '' }}</td><td>{{ row.storage_location or '' }}</td><td><code>{{ row.source_list_ids|join(', ') }}</code></td></tr>{% endfor %}</tbody></table></div></section>{% endblock %}
+{% extends "base.html" %}
+{% block content %}
+<div class="heading">
+  <div>
+    <h1>Resolved: {{ list.name }}</h1>
+    <p>Flattened without modifying source lists.</p>
+  </div>
+  <div class="actions">
+    <a class="button secondary" href="/l/{{ list.slug }}/export/json">JSON</a>
+    <a class="button secondary" href="/l/{{ list.slug }}/export/csv">CSV</a>
+    <a class="button secondary" href="/l/{{ list.slug }}">Back</a>
+  </div>
+</div>
+<section class="card">
+  <p id="reorder-status" class="reorder-status" role="status" aria-live="polite"></p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="name">Item</button></th>
+          <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="quantity">Quantity</button></th>
+          <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="category">Category</button></th>
+          <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="location">Location</button></th>
+          <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="source-lists">Source list(s)</button></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for preview_row in preview_rows %}
+        {% set row = preview_row.row %}
+        <tr data-item-id="{{ loop.index }}">
+          <td data-sort-key="name" data-sort-value="{{ row.name|lower }}"><strong>{{ row.name }}</strong><small>{{ row.notes }}</small></td>
+          <td data-sort-key="quantity" data-sort-value="{{ row.quantity }}">{{ row.quantity }} {{ row.unit }}</td>
+          <td data-sort-key="category" data-sort-value="{{ (row.category or '')|lower }}">{{ row.category or '' }}</td>
+          <td data-sort-key="location" data-sort-value="{{ (row.storage_location or '')|lower }}">{{ row.storage_location or '' }}</td>
+          <td data-sort-key="source-lists" data-sort-value="{{ preview_row.source_list_names|join(' ')|lower }}">{{ preview_row.source_list_names|join(', ') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

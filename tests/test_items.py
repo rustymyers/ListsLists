@@ -28,6 +28,26 @@ def test_home_page_search_updates_list_results(client, admin_headers):
     assert "Pantry" not in response.text
 
 
+def test_preview_shows_source_list_names_not_ids(client, admin_headers):
+    list_data = client.post(
+        "/api/v1/lists", headers=admin_headers, json={"name": "Camping"}
+    ).json()
+    client.post(
+        f"/api/v1/lists/{list_data['id']}/items",
+        headers=admin_headers,
+        json={"name": "Tent"},
+    )
+
+    preview = client.get(f"/l/{list_data['slug']}/preview", headers=admin_headers)
+
+    assert preview.status_code == 200
+    assert "Camping" in preview.text
+    assert list_data["id"] not in preview.text
+    assert 'class="sort-header" type="button" data-sort-key="name"' in preview.text
+    assert 'class="sort-header" type="button" data-sort-key="quantity"' in preview.text
+    assert 'class="sort-header" type="button" data-sort-key="source-lists"' in preview.text
+
+
 def test_items_page_creates_canonical_item(client, admin_headers):
     page = client.get("/items", headers=admin_headers)
     csrf_token = re.search(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
@@ -264,8 +284,9 @@ def test_web_add_required_list_and_reject_cycle(client, admin_headers):
     )
     assert response.status_code == 303
     page = client.get(f"/l/{parent['slug']}", headers=admin_headers)
-    assert 'data-sort-key="required-list"' in page.text
+    assert "<h2>Required lists</h2>" in page.text
     assert f'<a href="/l/{child["slug"]}">{child["name"]}</a>' in page.text
+    assert f"<strong>{child['name']}</strong>" not in page.text
     page = client.get(f"/l/{child['slug']}", headers=admin_headers)
     assert "<h2>Required by</h2>" in page.text
     assert f'<a href="/l/{parent["slug"]}">{parent["name"]}</a>' in page.text

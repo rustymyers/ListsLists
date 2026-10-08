@@ -29,7 +29,13 @@ from app.schemas import ItemCreate, ItemUpdate, ListCreate, ResolutionOptions
 from app.security import ensure_csrf
 from app.services.audit import record_event
 from app.services.email import send_email
-from app.services.lists import create_item, create_list, duplicate_list, update_item
+from app.services.lists import (
+    create_item,
+    create_list,
+    create_list_reference,
+    duplicate_list,
+    update_item,
+)
 from app.services.resolution import ListResolver, export_csv, export_json
 
 router = APIRouter()
@@ -294,7 +300,8 @@ def list_detail(request: Request, db: Db, user: OptionalUser, slug: str):
         "list_detail.html",
         {
             "list": obj,
-            "items": obj.items,
+            "items": [item for item in obj.items if not item.referenced_list_id],
+            "list_references": [item for item in obj.items if item.referenced_list_id],
             "user": user,
             "can_edit": can_edit(db, user, obj),
             "can_manage": can_manage(db, user, obj),
@@ -413,12 +420,7 @@ def add_required_list(
     referenced = db.get(ListModel, referenced_list_id)
     if not referenced or not can_view(db, user, referenced, allow_unlisted=False):
         raise HTTPException(404, detail="Referenced list not found")
-    data = ItemCreate(
-        name=referenced.name,
-        is_required=True,
-        referenced_list_id=referenced.id,
-    )
-    item = create_item(db, obj, data, user)
+    item = create_list_reference(db, obj, referenced, user)
     record_event(db, "item.create", "item", item.id, user, {"list_id": obj.id, "referenced_list_id": referenced.id})
     db.commit()
     return RedirectResponse(f"/l/{obj.slug}#item-{item.id}", 303)
@@ -510,7 +512,34 @@ def preview(request: Request, db: Db, user: OptionalUser, slug: str, include_opt
     require_view(db, user, obj, allow_unlisted=True)
     options = ResolutionOptions(include_optional=include_optional, merge_duplicates=merge_duplicates)
     rows = ListResolver(db, user, options).resolve(obj)
-    return render(request, "preview.html", {"list": obj, "rows": rows, "user": user})
+    source_list_ids = {source_id for row in rows for source_id in row.source_list_ids}
+    source_list_names = {
+        source.id: source.name
+        for source in db.scalars(
+            select(ListModel).where(ListModel.id.in_(source_list_ids))
+        ).all()
+        if can_view(db, user, source, allow_unlisted=source.id == obj.id)
+    }
+    preview_rows = [
+        {
+            "row": row,
+            "source_list_names": [
+                source_list_names[source_id]
+                for source_id in row.source_list_ids
+                if source_id in source_list_names
+            ],
+        }
+        for row in rows
+    ]
+    return render(
+        request,
+        "preview.html",
+        {
+            "list": obj,
+            "preview_rows": preview_rows,
+            "user": user,
+        },
+    )
 
 
 @router.get("/l/{slug}/export/{format}")

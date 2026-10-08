@@ -129,6 +129,36 @@ def create_item(db: Session, list_obj: ListModel, data: ItemCreate, actor: User)
     return item
 
 
+def create_list_reference(
+    db: Session, list_obj: ListModel, referenced_list: ListModel, actor: User
+) -> ListItem:
+    if referenced_list.deleted_at is not None:
+        raise HTTPException(422, detail="Referenced list does not exist")
+    if not can_view(db, actor, referenced_list, allow_unlisted=False):
+        raise HTTPException(403, detail="The referenced list is not accessible")
+    if would_create_cycle(db, list_obj.id, referenced_list.id):
+        raise HTTPException(409, detail="This reference would create a circular list graph")
+    if db.scalar(
+        select(ListItem.id).where(
+            ListItem.list_id == list_obj.id,
+            ListItem.referenced_list_id == referenced_list.id,
+        )
+    ):
+        raise HTTPException(409, detail="This list is already required")
+    maximum = db.scalar(select(func.max(ListItem.position)).where(ListItem.list_id == list_obj.id))
+    item = ListItem(
+        list_id=list_obj.id,
+        name=referenced_list.name,
+        quantity=1,
+        is_required=True,
+        position=(maximum if maximum is not None else -1) + 1,
+        referenced_list_id=referenced_list.id,
+    )
+    db.add(item)
+    db.flush()
+    return item
+
+
 def update_item(db: Session, item: ListItem, data: ItemUpdate, actor: User) -> ListItem:
     values = data.model_dump(exclude_unset=True)
     for required_field in {"name", "quantity", "unit", "is_required", "position"}:
@@ -180,35 +210,30 @@ def duplicate_list(db: Session, source: ListModel, owner: User) -> ListModel:
     db.flush()
     id_map: dict[str, ListItem] = {}
     for item in source.items:
-        canonical = (
-            _copy_canonical(item.canonical_item, owner.id)
-            if item.canonical_item
-            else CanonicalItem(
-                owner_id=owner.id,
-                **{field: deepcopy(getattr(item, field)) for field in CANONICAL_FIELDS},
-            )
-        )
-        db.add(canonical)
-        db.flush()
+        canonical = _copy_canonical(item.canonical_item, owner.id) if item.canonical_item else None
+        if canonical:
+            db.add(canonical)
+            db.flush()
+        values = canonical or item
         copied = ListItem(
             list_id=copy_list.id,
-            canonical_item_id=canonical.id,
-            name=canonical.name,
-            description=canonical.description,
+            canonical_item_id=canonical.id if canonical else None,
+            name=values.name,
+            description=values.description,
             quantity=item.quantity,
             packing_spot=item.packing_spot,
-            unit=canonical.unit,
-            category=canonical.category,
-            tags=deepcopy(canonical.tags),
-            storage_location=canonical.storage_location,
-            usage_context=canonical.usage_context,
+            unit=values.unit,
+            category=values.category,
+            tags=deepcopy(values.tags),
+            storage_location=values.storage_location,
+            usage_context=values.usage_context,
             is_required=item.is_required,
-            notes=canonical.notes,
+            notes=values.notes,
             position=item.position,
             referenced_list_id=item.referenced_list_id,
-            identity_key=canonical.identity_key,
-            conditional_requirements=deepcopy(canonical.conditional_requirements),
-            custom_metadata=deepcopy(canonical.custom_metadata),
+            identity_key=values.identity_key,
+            conditional_requirements=deepcopy(values.conditional_requirements),
+            custom_metadata=deepcopy(values.custom_metadata),
         )
         db.add(copied)
         db.flush()
