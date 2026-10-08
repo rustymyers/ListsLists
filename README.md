@@ -78,6 +78,19 @@ pytest
 ruff check app tests
 ```
 
+### Import canonical items from CSV
+
+Use [scripts/import_items_example.csv](./scripts/import_items_example.csv) as a template:
+
+```bash
+python scripts/import_items_csv.py scripts/import_items_example.csv --owner admin --dry-run
+python scripts/import_items_csv.py scripts/import_items_example.csv --owner admin
+```
+
+The importer creates canonical items only; it never updates existing items. For the selected
+owner, it skips a row when its `identity_key` already exists. Rows without an `identity_key` are
+skipped when an item with the same case-insensitive name and unit already exists.
+
 Reset Containers:
 
 ```bash
