@@ -24,6 +24,8 @@ def test_items_page_links_to_details_and_edits_canonical_item(client, admin_head
     details = client.get(f"/items/{item['canonical_item_id']}", headers=admin_headers)
     assert details.status_code == 200
     assert f'href="/canonical-items/{item["canonical_item_id"]}/edit"' in details.text
+    assert f'<a href="/l/{list_data["slug"]}">{list_data["name"]}</a>' in details.text
+    assert "1.0 carton" in details.text
 
     edit_page = client.get(
         f"/canonical-items/{item['canonical_item_id']}/edit", headers=admin_headers

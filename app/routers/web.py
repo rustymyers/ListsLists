@@ -79,7 +79,22 @@ def canonical_item_page(request: Request, db: Db, user: CurrentUser, canonical_i
     item = db.get(CanonicalItem, canonical_item_id)
     if not item or item.owner_id != user.id:
         raise HTTPException(404, detail="Item not found")
-    return render(request, "canonical_item.html", {"item": item, "user": user})
+    placements = db.scalars(
+        select(ListItem)
+        .where(ListItem.canonical_item_id == item.id)
+        .options(selectinload(ListItem.list))
+        .order_by(ListItem.created_at)
+    ).all()
+    visible_placements = [
+        placement
+        for placement in placements
+        if can_view(db, user, placement.list, allow_unlisted=False)
+    ]
+    return render(
+        request,
+        "canonical_item.html",
+        {"item": item, "placements": visible_placements, "user": user},
+    )
 
 
 @router.post("/canonical-items/{canonical_item_id}/delete")
@@ -103,6 +118,7 @@ def delete_canonical_item(
             "canonical_item.html",
             {
                 "item": item,
+                "placements": [],
                 "user": user,
                 "error": (
                     f"Cannot delete this item because it is used in {placement_count} "
