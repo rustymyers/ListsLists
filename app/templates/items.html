@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% block title %}Items · ListsLists{% endblock %}{% block content %}
+<div class="heading"><div><h1>Items</h1><p>Manage the canonical items shared across your lists.</p></div></div>
+<form class="search"><input name="q" value="{{ q }}" placeholder="Search items"><button>Search</button></form>
+<div class="grid">{% for item in items %}<article class="card"><h2><a href="/items/{{ item.id }}">{{ item.name }}</a></h2><p>{{ item.description or "No description" }}</p><p><span class="pill">{{ item.unit }}</span>{% if item.category %} <span class="pill">{{ item.category }}</span>{% endif %}</p><small>{{ item.storage_location or "No storage location" }}</small></article>{% else %}<div class="empty">No items found.</div>{% endfor %}</div>
+{% endblock %}

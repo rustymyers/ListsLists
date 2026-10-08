@@ -1,6 +1,97 @@
 import re
 
 
+def test_home_page_renders_lists(client, admin_headers):
+    response = client.get("/", headers=admin_headers)
+
+    assert response.status_code == 200
+    assert "<h1>Your lists</h1>" in response.text
+
+
+def test_items_page_links_to_details_and_edits_canonical_item(client, admin_headers):
+    list_data = client.post(
+        "/api/v1/lists", headers=admin_headers, json={"name": "Groceries"}
+    ).json()
+    item = client.post(
+        f"/api/v1/lists/{list_data['id']}/items",
+        headers=admin_headers,
+        json={"name": "Milk", "unit": "carton"},
+    ).json()
+
+    page = client.get("/items", headers=admin_headers)
+    assert f'href="/items/{item["canonical_item_id"]}"' in page.text
+
+    details = client.get(f"/items/{item['canonical_item_id']}", headers=admin_headers)
+    assert details.status_code == 200
+    assert f'href="/canonical-items/{item["canonical_item_id"]}/edit"' in details.text
+
+    edit_page = client.get(
+        f"/canonical-items/{item['canonical_item_id']}/edit", headers=admin_headers
+    )
+    csrf_token = re.search(r'name="csrf_token" value="([^"]+)"', edit_page.text).group(1)
+    response = client.post(
+        f"/canonical-items/{item['canonical_item_id']}/edit",
+        headers=admin_headers,
+        data={
+            "csrf_token": csrf_token,
+            "name": "Oat milk",
+            "unit": "carton",
+            "category": "Breakfast",
+            "tags": "vegan",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    updated = client.get(f"/api/v1/items/{item['id']}", headers=admin_headers).json()
+    assert updated["name"] == "Oat milk"
+    assert updated["category"] == "Breakfast"
+    assert updated["tags"] == ["vegan"]
+
+
+def test_canonical_item_delete_blocks_used_items_and_deletes_unused_items(
+    client, admin_headers
+):
+    list_data = client.post(
+        "/api/v1/lists", headers=admin_headers, json={"name": "Groceries"}
+    ).json()
+    placement = client.post(
+        f"/api/v1/lists/{list_data['id']}/items",
+        headers=admin_headers,
+        json={"name": "Milk"},
+    ).json()
+    details = client.get(
+        f"/items/{placement['canonical_item_id']}", headers=admin_headers
+    )
+    csrf_token = re.search(r'name="csrf_token" value="([^"]+)"', details.text).group(1)
+
+    blocked = client.post(
+        f"/canonical-items/{placement['canonical_item_id']}/delete",
+        headers=admin_headers,
+        data={"csrf_token": csrf_token},
+    )
+    assert blocked.status_code == 409
+    assert "Remove those placements first." in blocked.text
+
+    unused = client.post(
+        "/api/v1/canonical-items",
+        headers=admin_headers,
+        json={"name": "Unused", "unit": "each"},
+    ).json()
+    details = client.get(f"/items/{unused['id']}", headers=admin_headers)
+    csrf_token = re.search(r'name="csrf_token" value="([^"]+)"', details.text).group(1)
+    deleted = client.post(
+        f"/canonical-items/{unused['id']}/delete",
+        headers=admin_headers,
+        data={"csrf_token": csrf_token},
+        follow_redirects=False,
+    )
+
+    assert deleted.status_code == 303
+    assert deleted.headers["location"] == "/items"
+    assert client.get(f"/items/{unused['id']}", headers=admin_headers).status_code == 404
+
+
 def test_item_reorder_copy_move_and_delete(client, admin_headers):
     one = client.post("/api/v1/lists", headers=admin_headers, json={"name": "One"}).json()
     two = client.post("/api/v1/lists", headers=admin_headers, json={"name": "Two"}).json()

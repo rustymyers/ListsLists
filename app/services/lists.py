@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import ItemDependency, ListItem, ListModel, User
+from app.models import CanonicalItem, ItemDependency, ListItem, ListModel, User
 from app.permissions import can_view
 from app.schemas import ItemCreate, ItemUpdate, ListCreate
 
@@ -70,6 +70,23 @@ def _set_dependencies(db: Session, item: ListItem, dependency_ids: list[str]) ->
         item.dependencies.append(ItemDependency(depends_on_item_id=dep_id))
 
 
+CANONICAL_FIELDS = (
+    "name", "description", "unit", "category", "tags", "storage_location",
+    "usage_context", "notes", "identity_key", "conditional_requirements", "custom_metadata",
+)
+
+
+def _canonical_values(data: ItemCreate) -> dict:
+    return data.model_dump(include=set(CANONICAL_FIELDS))
+
+
+def _copy_canonical(source: CanonicalItem, owner_id: str) -> CanonicalItem:
+    return CanonicalItem(
+        owner_id=owner_id,
+        **{field: deepcopy(getattr(source, field)) for field in CANONICAL_FIELDS},
+    )
+
+
 def create_item(db: Session, list_obj: ListModel, data: ItemCreate, actor: User) -> ListItem:
     if data.referenced_list_id:
         ref = db.get(ListModel, data.referenced_list_id)
@@ -81,10 +98,31 @@ def create_item(db: Session, list_obj: ListModel, data: ItemCreate, actor: User)
             raise HTTPException(409, detail="This reference would create a circular list graph")
     position = data.position
     if position is None:
-        maximum = db.scalar(select(func.max(ListItem.position)).where(ListItem.list_id == list_obj.id))
+        maximum = db.scalar(
+            select(func.max(ListItem.position)).where(ListItem.list_id == list_obj.id)
+        )
         position = (maximum if maximum is not None else -1) + 1
-    values = data.model_dump(exclude={"dependency_ids", "position"})
-    item = ListItem(list_id=list_obj.id, position=position, **values)
+    canonical = db.get(CanonicalItem, data.canonical_item_id) if data.canonical_item_id else None
+    if canonical and canonical.owner_id != actor.id:
+        raise HTTPException(403, detail="The canonical item is not accessible")
+    if canonical and data.duplicate:
+        canonical = _copy_canonical(canonical, actor.id)
+        db.add(canonical)
+        db.flush()
+    if not canonical:
+        canonical = CanonicalItem(owner_id=actor.id, **_canonical_values(data))
+        db.add(canonical)
+        db.flush()
+    item = ListItem(
+        list_id=list_obj.id,
+        canonical_item_id=canonical.id,
+        quantity=data.quantity,
+        packing_spot=data.packing_spot,
+        is_required=data.is_required,
+        position=position,
+        referenced_list_id=data.referenced_list_id,
+        **{field: deepcopy(getattr(canonical, field)) for field in CANONICAL_FIELDS},
+    )
     db.add(item)
     db.flush()
     _set_dependencies(db, item, data.dependency_ids)
@@ -97,6 +135,7 @@ def update_item(db: Session, item: ListItem, data: ItemUpdate, actor: User) -> L
         if required_field in values and values[required_field] is None:
             raise HTTPException(422, detail=f"{required_field} cannot be null")
     dependency_ids = values.pop("dependency_ids", None)
+    values.pop("canonical_item_id", None)
     referenced = values.get("referenced_list_id")
     if referenced and referenced != item.referenced_list_id:
         ref = db.get(ListModel, referenced)
@@ -106,8 +145,22 @@ def update_item(db: Session, item: ListItem, data: ItemUpdate, actor: User) -> L
             raise HTTPException(403, detail="The referenced list is not accessible")
         if would_create_cycle(db, item.list_id, referenced):
             raise HTTPException(409, detail="This reference would create a circular list graph")
+    placement_fields = {"quantity", "packing_spot", "position", "is_required"}
+    canonical = item.canonical_item
+    if not canonical:
+        canonical = CanonicalItem(
+            owner_id=actor.id,
+            **{field: getattr(item, field) for field in CANONICAL_FIELDS},
+        )
+        db.add(canonical)
+        db.flush()
+        item.canonical_item_id = canonical.id
     for key, value in values.items():
-        setattr(item, key, value)
+        if key in placement_fields:
+            setattr(item, key, value)
+        elif key in CANONICAL_FIELDS:
+            setattr(canonical, key, value)
+            setattr(item, key, value)
     if dependency_ids is not None:
         _set_dependencies(db, item, dependency_ids)
     return item
@@ -127,23 +180,35 @@ def duplicate_list(db: Session, source: ListModel, owner: User) -> ListModel:
     db.flush()
     id_map: dict[str, ListItem] = {}
     for item in source.items:
+        canonical = (
+            _copy_canonical(item.canonical_item, owner.id)
+            if item.canonical_item
+            else CanonicalItem(
+                owner_id=owner.id,
+                **{field: deepcopy(getattr(item, field)) for field in CANONICAL_FIELDS},
+            )
+        )
+        db.add(canonical)
+        db.flush()
         copied = ListItem(
             list_id=copy_list.id,
-            name=item.name,
-            description=item.description,
+            canonical_item_id=canonical.id,
+            name=canonical.name,
+            description=canonical.description,
             quantity=item.quantity,
-            unit=item.unit,
-            category=item.category,
-            tags=deepcopy(item.tags),
-            storage_location=item.storage_location,
-            usage_context=item.usage_context,
+            packing_spot=item.packing_spot,
+            unit=canonical.unit,
+            category=canonical.category,
+            tags=deepcopy(canonical.tags),
+            storage_location=canonical.storage_location,
+            usage_context=canonical.usage_context,
             is_required=item.is_required,
-            notes=item.notes,
+            notes=canonical.notes,
             position=item.position,
             referenced_list_id=item.referenced_list_id,
-            identity_key=item.identity_key,
-            conditional_requirements=deepcopy(item.conditional_requirements),
-            custom_metadata=deepcopy(item.custom_metadata),
+            identity_key=canonical.identity_key,
+            conditional_requirements=deepcopy(canonical.conditional_requirements),
+            custom_metadata=deepcopy(canonical.custom_metadata),
         )
         db.add(copied)
         db.flush()
@@ -151,5 +216,12 @@ def duplicate_list(db: Session, source: ListModel, owner: User) -> ListModel:
     for original in source.items:
         for dep in original.dependencies:
             if dep.depends_on_item_id in id_map:
-                db.add(ItemDependency(item_id=id_map[original.id].id, depends_on_item_id=id_map[dep.depends_on_item_id].id, condition=dep.condition, required=dep.required))
+                db.add(
+                    ItemDependency(
+                        item_id=id_map[original.id].id,
+                        depends_on_item_id=id_map[dep.depends_on_item_id].id,
+                        condition=dep.condition,
+                        required=dep.required,
+                    )
+                )
     return copy_list

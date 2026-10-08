@@ -8,9 +8,9 @@ from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
 from app.dependencies import CurrentUser, Db, OptionalUser
-from app.models import ExportProfile, ItemDependency, ListItem, ListModel, ListShare, User, Visibility
+from app.models import CanonicalItem, ExportProfile, ItemDependency, ListItem, ListModel, ListShare, User, Visibility
 from app.permissions import can_view, require_edit, require_manage, require_view
-from app.schemas import ExportProfileCreate, ItemCreate, ItemOut, ItemUpdate, ListCreate, ListOut, ListUpdate, ResolutionOptions, ShareCreate
+from app.schemas import CanonicalItemOut, ExportProfileCreate, ItemCreate, ItemOut, ItemUpdate, ListCreate, ListOut, ListUpdate, ResolutionOptions, ShareCreate
 from app.security import create_access_token, verify_password
 from app.services.audit import record_event
 from app.services.email import send_email
@@ -28,12 +28,42 @@ def get_list_or_404(db: Db, list_id: str) -> ListModel:
 
 
 def safe_item_out(db: Db, user: User | None, item: ListItem) -> ItemOut:
-    output = ItemOut.model_validate(item)
+    source = item.canonical_item
+    values = {field: getattr(source or item, field) for field in (
+        "name", "description", "unit", "category", "tags", "storage_location",
+        "usage_context", "notes", "identity_key", "conditional_requirements", "custom_metadata",
+    )}
+    values.update({
+        "id": item.id, "list_id": item.list_id, "canonical_item_id": item.canonical_item_id,
+        "quantity": item.quantity, "packing_spot": item.packing_spot, "is_required": item.is_required,
+        "position": item.position, "referenced_list_id": item.referenced_list_id,
+    })
+    output = ItemOut.model_validate(values)
     if item.referenced_list_id:
         nested = db.get(ListModel, item.referenced_list_id)
         if not nested or not can_view(db, user, nested, allow_unlisted=False):
             output.referenced_list_id = None
     return output
+
+
+@router.get("/canonical-items", response_model=list[CanonicalItemOut])
+def canonical_items(db: Db, user: CurrentUser, q: str | None = None, offset: int = 0, limit: Annotated[int, Query(le=200)] = 100):
+    stmt = select(CanonicalItem).where(CanonicalItem.owner_id == user.id)
+    if q:
+        stmt = stmt.where(or_(CanonicalItem.name.ilike(f"%{q}%"), CanonicalItem.description.ilike(f"%{q}%")))
+    return db.scalars(stmt.order_by(CanonicalItem.name).offset(offset).limit(limit)).all()
+
+
+@router.post("/canonical-items", response_model=CanonicalItemOut, status_code=201)
+def add_canonical_item(request: Request, db: Db, user: CurrentUser, data: ItemCreate):
+    item = CanonicalItem(owner_id=user.id, **data.model_dump(include=set((
+        "name", "description", "unit", "category", "tags", "storage_location",
+        "usage_context", "notes", "identity_key", "conditional_requirements", "custom_metadata",
+    ))))
+    db.add(item)
+    record_event(db, "canonical_item.create", "canonical_item", item.id, user, request.client.host if request.client else None)
+    db.commit()
+    return item
 
 
 @router.post("/auth/token")
@@ -167,7 +197,24 @@ def copy_item(request: Request, db: Db, user: CurrentUser, item_id: str, target_
     require_view(db, user, source_list)
     target = get_list_or_404(db, target_list_id or source.list_id)
     require_edit(db, user, target)
-    data = ItemCreate(**{key: getattr(source, key) for key in ItemCreate.model_fields if key not in {"dependency_ids", "position"}})
+    data = ItemCreate(
+        name=source.name,
+        description=source.description,
+        quantity=source.quantity,
+        packing_spot=source.packing_spot,
+        unit=source.unit,
+        category=source.category,
+        tags=list(source.tags),
+        storage_location=source.storage_location,
+        usage_context=source.usage_context,
+        is_required=source.is_required,
+        notes=source.notes,
+        referenced_list_id=source.referenced_list_id,
+        identity_key=source.identity_key,
+        conditional_requirements=dict(source.conditional_requirements),
+        custom_metadata=dict(source.custom_metadata),
+        duplicate=True,
+    )
     copied = create_item(db, target, data, user)
     record_event(db, "item.copy", "item", copied.id, user, {"source_item_id": source.id, "target_list_id": target.id}, request.client.host if request.client else None)
     db.commit()
@@ -239,6 +286,7 @@ def set_share(request: Request, db: Db, user: CurrentUser, list_id: str, data: S
     if data.user_id == obj.owner_id or not target_user or not target_user.is_active:
         raise HTTPException(422, detail="Invalid share recipient")
     share = db.scalar(select(ListShare).where(ListShare.list_id == obj.id, ListShare.user_id == data.user_id))
+    invitation_needed = not share or share.role != data.role
     if share:
         share.role = data.role
     else:
@@ -247,7 +295,7 @@ def set_share(request: Request, db: Db, user: CurrentUser, list_id: str, data: S
     record_event(db, "share.grant", "list", obj.id, user, {"user_id": data.user_id, "role": data.role.value}, request.client.host if request.client else None)
     db.commit()
     settings = get_settings()
-    if settings.smtp_host:
+    if invitation_needed and settings.smtp_host:
         try:
             send_email(
                 settings,

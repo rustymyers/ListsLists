@@ -70,14 +70,37 @@ class ListModel(Base):
     shares: Mapped[list["ListShare"]] = relationship(back_populates="list", cascade="all, delete-orphan")
 
 
+class CanonicalItem(Base):
+    __tablename__ = "canonical_items"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(240), index=True)
+    description: Mapped[str] = mapped_column(Text, default="")
+    unit: Mapped[str] = mapped_column(String(40), default="each")
+    category: Mapped[str | None] = mapped_column(String(120), index=True)
+    tags: Mapped[list[str]] = mapped_column(JSON, default=list)
+    storage_location: Mapped[str | None] = mapped_column(String(240))
+    usage_context: Mapped[str | None] = mapped_column(String(240))
+    notes: Mapped[str] = mapped_column(Text, default="")
+    identity_key: Mapped[str | None] = mapped_column(String(160), index=True)
+    conditional_requirements: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    custom_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    owner: Mapped[User] = relationship()
+
+
 class ListItem(Base):
     __tablename__ = "list_items"
     __table_args__ = (Index("ix_items_list_position", "list_id", "position"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
     list_id: Mapped[str] = mapped_column(ForeignKey("lists.id", ondelete="CASCADE"), index=True)
+    canonical_item_id: Mapped[str | None] = mapped_column(ForeignKey("canonical_items.id", ondelete="RESTRICT"), index=True)
     name: Mapped[str] = mapped_column(String(240))
     description: Mapped[str] = mapped_column(Text, default="")
     quantity: Mapped[float] = mapped_column(Float, default=1.0)
+    packing_spot: Mapped[str | None] = mapped_column(String(240))
     unit: Mapped[str] = mapped_column(String(40), default="each")
     category: Mapped[str | None] = mapped_column(String(120), index=True)
     tags: Mapped[list[str]] = mapped_column(JSON, default=list)
@@ -94,6 +117,7 @@ class ListItem(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     list: Mapped[ListModel] = relationship(back_populates="items", foreign_keys=[list_id])
+    canonical_item: Mapped[CanonicalItem | None] = relationship(foreign_keys=[canonical_item_id])
     referenced_list: Mapped[ListModel | None] = relationship(foreign_keys=[referenced_list_id])
     dependencies = relationship(
         "ItemDependency",

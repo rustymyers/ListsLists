@@ -48,6 +48,7 @@ class ItemCreate(BaseModel):
     name: str = Field(min_length=1, max_length=240)
     description: str = ""
     quantity: float = Field(default=1, ge=0)
+    packing_spot: str | None = Field(default=None, max_length=240)
     unit: str = Field(default="each", max_length=40)
     category: str | None = Field(default=None, max_length=120)
     tags: list[str] = Field(default_factory=list)
@@ -61,6 +62,8 @@ class ItemCreate(BaseModel):
     conditional_requirements: dict[str, Any] = Field(default_factory=dict)
     custom_metadata: dict[str, Any] = Field(default_factory=dict)
     dependency_ids: list[str] = Field(default_factory=list)
+    canonical_item_id: str | None = None
+    duplicate: bool = False
 
     @field_validator("tags")
     @classmethod
@@ -72,6 +75,7 @@ class ItemUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=240)
     description: str | None = None
     quantity: float | None = Field(default=None, ge=0)
+    packing_spot: str | None = None
     unit: str | None = None
     category: str | None = None
     tags: list[str] | None = None
@@ -85,14 +89,17 @@ class ItemUpdate(BaseModel):
     conditional_requirements: dict[str, Any] | None = None
     custom_metadata: dict[str, Any] | None = None
     dependency_ids: list[str] | None = None
+    canonical_item_id: str | None = None
 
 
 class ItemOut(BaseModel):
     id: str
     list_id: str
+    canonical_item_id: str | None
     name: str
     description: str
     quantity: float
+    packing_spot: str | None
     unit: str
     category: str | None
     tags: list[str]
@@ -102,6 +109,23 @@ class ItemOut(BaseModel):
     notes: str
     position: int
     referenced_list_id: str | None
+    identity_key: str | None
+    conditional_requirements: dict[str, Any]
+    custom_metadata: dict[str, Any]
+    model_config = {"from_attributes": True}
+
+
+class CanonicalItemOut(BaseModel):
+    id: str
+    owner_id: str
+    name: str
+    description: str
+    unit: str
+    category: str | None
+    tags: list[str]
+    storage_location: str | None
+    usage_context: str | None
+    notes: str
     identity_key: str | None
     conditional_requirements: dict[str, Any]
     custom_metadata: dict[str, Any]

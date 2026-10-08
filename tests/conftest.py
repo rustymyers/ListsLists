@@ -10,6 +10,7 @@ os.environ.update({
     "LISTSLISTS_SECRET_KEY": "test-secret-key-with-enough-entropy",
     "LISTSLISTS_BOOTSTRAP_ADMIN_PASSWORD": "test-password-123!",
     "LISTSLISTS_BOOTSTRAP_ADMIN_EMAIL": "admin@example.com",
+    "LISTSLISTS_SMTP_HOST": "",
 })
 
 import pytest

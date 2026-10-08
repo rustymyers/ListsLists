@@ -8,7 +8,7 @@
   <script src="/static/list-reorder.js" defer></script>
 </head>
 <body>
-<header><a class="brand" href="/">ListsLists</a><nav>{% if user %}<a href="/">Lists</a>{% if user.is_admin %}<a href="/admin">Admin</a>{% endif %}<form method="post" action="/logout" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="link">Log out</button></form>{% endif %}<a href="/docs">API</a></nav></header>
+<header><a class="brand" href="/">ListsLists</a><nav>{% if user %}<a href="/">Lists</a><a href="/items">Items</a>{% if user.is_admin %}<a href="/admin">Admin</a>{% endif %}<form method="post" action="/logout" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="link">Log out</button></form>{% endif %}<a href="/docs">API</a></nav></header>
 <main><div id="page-status"></div>{% block content %}{% endblock %}</main>
 <footer>ListsLists v1 · Self-hosted contextual lists</footer>
 </body></html>

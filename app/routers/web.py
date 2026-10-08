@@ -2,17 +2,34 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
 from app.dependencies import CurrentUser, Db, OptionalUser
-from app.models import AppSetting, AuditEvent, ListItem, ListModel, ListShare, ShareRole, User, Visibility
-from app.permissions import can_edit, can_manage, can_view, require_edit, require_manage, require_view
+from app.models import (
+    AppSetting,
+    AuditEvent,
+    CanonicalItem,
+    ListItem,
+    ListModel,
+    ListShare,
+    ShareRole,
+    User,
+    Visibility,
+)
+from app.permissions import (
+    can_edit,
+    can_manage,
+    can_view,
+    require_edit,
+    require_manage,
+    require_view,
+)
 from app.schemas import ItemCreate, ItemUpdate, ListCreate, ResolutionOptions
 from app.security import ensure_csrf
 from app.services.audit import record_event
-from app.services.lists import create_item, create_list, duplicate_list, update_item
 from app.services.email import send_email
+from app.services.lists import create_item, create_list, duplicate_list, update_item
 from app.services.resolution import ListResolver, export_csv, export_json
 
 router = APIRouter()
@@ -31,6 +48,7 @@ def home(request: Request, db: Db, user: OptionalUser, q: str | None = None):
         ListModel.deleted_at.is_(None), ListModel.archived.is_(False),
         or_(ListModel.owner_id == user.id, ListModel.id.in_(shared_ids), ListModel.visibility == Visibility.public),
     )
+
     if q:
         stmt = stmt.where(or_(ListModel.name.ilike(f"%{q}%"), ListModel.description.ilike(f"%{q}%")))
     lists = db.scalars(stmt.order_by(ListModel.updated_at.desc())).all()
@@ -40,6 +58,108 @@ def home(request: Request, db: Db, user: OptionalUser, q: str | None = None):
         "home.html",
         {"lists": lists, "q": q or "", "user": user, "site_notice": notice.value if notice else ""},
     )
+
+
+@router.get("/items")
+def item_management(request: Request, db: Db, user: CurrentUser, q: str | None = None):
+    stmt = select(CanonicalItem).where(CanonicalItem.owner_id == user.id)
+    if q:
+        stmt = stmt.where(
+            or_(
+                CanonicalItem.name.ilike(f"%{q}%"),
+                CanonicalItem.description.ilike(f"%{q}%"),
+            )
+        )
+    items = db.scalars(stmt.order_by(CanonicalItem.name)).all()
+    return render(request, "items.html", {"items": items, "q": q or "", "user": user})
+
+
+@router.get("/items/{canonical_item_id}")
+def canonical_item_page(request: Request, db: Db, user: CurrentUser, canonical_item_id: str):
+    item = db.get(CanonicalItem, canonical_item_id)
+    if not item or item.owner_id != user.id:
+        raise HTTPException(404, detail="Item not found")
+    return render(request, "canonical_item.html", {"item": item, "user": user})
+
+
+@router.post("/canonical-items/{canonical_item_id}/delete")
+def delete_canonical_item(
+    request: Request,
+    db: Db,
+    user: CurrentUser,
+    canonical_item_id: str,
+    csrf_token: str = Form(),
+):
+    ensure_csrf(request, csrf_token)
+    item = db.get(CanonicalItem, canonical_item_id)
+    if not item or item.owner_id != user.id:
+        raise HTTPException(404, detail="Item not found")
+    placement_count = db.scalar(
+        select(func.count()).select_from(ListItem).where(ListItem.canonical_item_id == item.id)
+    )
+    if placement_count:
+        return request.app.state.templates.TemplateResponse(
+            request,
+            "canonical_item.html",
+            {
+                "item": item,
+                "user": user,
+                "error": (
+                    f"Cannot delete this item because it is used in {placement_count} "
+                    "list placement(s). Remove those placements first."
+                ),
+            },
+            status_code=409,
+        )
+    db.delete(item)
+    record_event(db, "canonical_item.delete", "canonical_item", item.id, user)
+    db.commit()
+    return RedirectResponse("/items", 303)
+
+
+@router.get("/canonical-items/{canonical_item_id}/edit")
+def edit_canonical_item_page(
+    request: Request, db: Db, user: CurrentUser, canonical_item_id: str
+):
+    item = db.get(CanonicalItem, canonical_item_id)
+    if not item or item.owner_id != user.id:
+        raise HTTPException(404, detail="Item not found")
+    return render(request, "canonical_item_edit.html", {"item": item, "user": user})
+
+
+@router.post("/canonical-items/{canonical_item_id}/edit")
+def edit_canonical_item(
+    request: Request,
+    db: Db,
+    user: CurrentUser,
+    canonical_item_id: str,
+    name: str = Form(),
+    description: str = Form(""),
+    unit: str = Form("each"),
+    category: str = Form(""),
+    tags: str = Form(""),
+    storage_location: str = Form(""),
+    usage_context: str = Form(""),
+    notes: str = Form(""),
+    identity_key: str = Form(""),
+    csrf_token: str = Form(),
+):
+    ensure_csrf(request, csrf_token)
+    item = db.get(CanonicalItem, canonical_item_id)
+    if not item or item.owner_id != user.id:
+        raise HTTPException(404, detail="Item not found")
+    item.name = name
+    item.description = description
+    item.unit = unit
+    item.category = category or None
+    item.tags = [tag.strip() for tag in tags.split(",") if tag.strip()]
+    item.storage_location = storage_location or None
+    item.usage_context = usage_context or None
+    item.notes = notes
+    item.identity_key = identity_key or None
+    record_event(db, "canonical_item.update", "canonical_item", item.id, user)
+    db.commit()
+    return RedirectResponse(f"/items/{item.id}", 303)
 
 
 @router.get("/lists/new")
@@ -96,7 +216,11 @@ def list_detail(request: Request, db: Db, user: OptionalUser, slug: str):
         if can_view(db, user, candidate, allow_unlisted=False)
     ]
     available_lists = []
+    canonical_items = []
     if can_edit(db, user, obj):
+        canonical_items = db.scalars(
+            select(CanonicalItem).where(CanonicalItem.owner_id == user.id).order_by(CanonicalItem.name)
+        ).all()
         available_lists = [
             candidate
             for candidate in db.scalars(
@@ -116,6 +240,7 @@ def list_detail(request: Request, db: Db, user: OptionalUser, slug: str):
             "can_edit": can_edit(db, user, obj),
             "can_manage": can_manage(db, user, obj),
             "available_lists": available_lists,
+            "canonical_items": canonical_items,
             "visible_referenced_lists": visible_referenced_lists,
             "required_by_lists": required_by_lists,
         },
@@ -185,13 +310,13 @@ def delete(request: Request, db: Db, user: CurrentUser, slug: str, csrf_token: s
 
 
 @router.post("/l/{slug}/items")
-def add_item(request: Request, db: Db, user: CurrentUser, slug: str, name: str = Form(), quantity: float = Form(1), unit: str = Form("each"), category: str = Form(""), tags: str = Form(""), storage_location: str = Form(""), notes: str = Form(""), is_required: bool = Form(False), referenced_list_id: str = Form(""), csrf_token: str = Form()):
+def add_item(request: Request, db: Db, user: CurrentUser, slug: str, name: str = Form(""), quantity: float = Form(1), unit: str = Form("each"), category: str = Form(""), tags: str = Form(""), storage_location: str = Form(""), packing_spot: str = Form(""), notes: str = Form(""), is_required: bool = Form(False), referenced_list_id: str = Form(""), canonical_item_id: str = Form(""), duplicate: bool = Form(False), csrf_token: str = Form()):
     ensure_csrf(request, csrf_token)
     obj = db.scalar(select(ListModel).where(ListModel.slug == slug))
     if not obj:
         raise HTTPException(404)
     require_edit(db, user, obj)
-    data = ItemCreate(name=name, quantity=quantity, unit=unit, category=category or None, tags=[x.strip() for x in tags.split(",") if x.strip()], storage_location=storage_location or None, notes=notes, is_required=is_required, referenced_list_id=referenced_list_id or None)
+    data = ItemCreate(name=name or "New item", quantity=quantity, unit=unit, category=category or None, tags=[x.strip() for x in tags.split(",") if x.strip()], storage_location=storage_location or None, packing_spot=packing_spot or None, notes=notes, is_required=is_required, referenced_list_id=referenced_list_id or None, canonical_item_id=canonical_item_id or None, duplicate=duplicate)
     item = create_item(db, obj, data, user)
     record_event(db, "item.create", "item", item.id, user, {"list_id": obj.id})
     db.commit()
@@ -261,6 +386,7 @@ def edit_item(
     name: str = Form(),
     description: str = Form(""),
     quantity: float = Form(1),
+    packing_spot: str = Form(""),
     unit: str = Form("each"),
     category: str = Form(""),
     tags: str = Form(""),
@@ -284,6 +410,7 @@ def edit_item(
         name=name,
         description=description,
         quantity=quantity,
+        packing_spot=packing_spot or None,
         unit=unit,
         category=category or None,
         tags=[tag.strip() for tag in tags.split(",") if tag.strip()],
@@ -373,6 +500,7 @@ def grant_share(request: Request, db: Db, user: CurrentUser, slug: str, shared_u
     if not target or not target.is_active or target.id == obj.owner_id:
         raise HTTPException(422, detail="Invalid share recipient")
     share = db.scalar(select(ListShare).where(ListShare.list_id == obj.id, ListShare.user_id == target.id))
+    invitation_needed = not share or share.role != role
     if share:
         share.role = role
     else:
@@ -381,7 +509,7 @@ def grant_share(request: Request, db: Db, user: CurrentUser, slug: str, shared_u
     db.commit()
     from app.config import get_settings
     settings = get_settings()
-    if settings.smtp_host:
+    if invitation_needed and settings.smtp_host:
         try:
             send_email(settings, target.email, f"{user.username} shared a list with you", f"You now have {role.value} access to {obj.name}.\n\n{settings.public_base_url}/l/{obj.slug}")
         except Exception as exc:
