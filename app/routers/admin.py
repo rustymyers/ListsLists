@@ -1,15 +1,18 @@
+import json
 import secrets
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
 
 from app.config import get_settings
 from app.dependencies import AdminUser, Db
 from app.models import AppSetting, AuditEvent, PasswordResetToken, User
 from app.security import ensure_csrf, hash_password, new_reset_token
 from app.services.audit import record_event
+from app.services.data_transfer import export_backup, import_backup
 from app.services.email import send_email
 
 router = APIRouter(prefix="/admin")
@@ -103,4 +106,47 @@ def admin_reset(request: Request, db: Db, user: AdminUser, user_id: str, csrf_to
 def test_email(request: Request, user: AdminUser, to: str = Form(), csrf_token: str = Form()):
     ensure_csrf(request, csrf_token)
     send_email(get_settings(), to, "ListsLists SMTP test", "Email delivery is working.")
+    return RedirectResponse("/admin", 303)
+
+
+@router.get("/data-export")
+def data_export(request: Request, db: Db, user: AdminUser):
+    record_event(db, "admin.data_export", "backup", None, user)
+    db.commit()
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    return Response(
+        export_backup(db),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="listslists-{stamp}.json"'},
+    )
+
+
+@router.post("/data-import")
+async def data_import(
+    request: Request,
+    db: Db,
+    user: AdminUser,
+    backup: UploadFile = File(),
+    confirmation: str = Form(),
+    csrf_token: str = Form(),
+):
+    ensure_csrf(request, csrf_token)
+    if confirmation != "REPLACE":
+        raise HTTPException(422, detail='Type "REPLACE" to confirm the import')
+    if backup.content_type not in {"application/json", "text/json", "application/octet-stream"}:
+        raise HTTPException(422, detail="Import file must be JSON")
+    contents = await backup.read(10 * 1024 * 1024 + 1)
+    if len(contents) > 10 * 1024 * 1024:
+        raise HTTPException(413, detail="Import file must be 10 MB or smaller")
+    try:
+        payload = json.loads(contents)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(422, detail="Import file contains invalid JSON") from exc
+    try:
+        import_backup(db, payload, user.id)
+        record_event(db, "admin.data_import", "backup", None, user)
+        db.commit()
+    except (IntegrityError, ValueError) as exc:
+        db.rollback()
+        raise HTTPException(422, detail=f"Import failed: {exc}") from exc
     return RedirectResponse("/admin", 303)

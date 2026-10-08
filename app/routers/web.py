@@ -74,6 +74,45 @@ def item_management(request: Request, db: Db, user: CurrentUser, q: str | None =
     return render(request, "items.html", {"items": items, "q": q or "", "user": user})
 
 
+@router.post("/items")
+def create_canonical_item(
+    request: Request,
+    db: Db,
+    user: CurrentUser,
+    name: str = Form(),
+    description: str = Form(""),
+    unit: str = Form("each"),
+    category: str = Form(""),
+    tags: str = Form(""),
+    storage_location: str = Form(""),
+    usage_context: str = Form(""),
+    notes: str = Form(""),
+    identity_key: str = Form(""),
+    csrf_token: str = Form(),
+):
+    ensure_csrf(request, csrf_token)
+    if not name.strip():
+        raise HTTPException(422, detail="Item name is required")
+    if not unit.strip():
+        raise HTTPException(422, detail="Item unit is required")
+    item = CanonicalItem(
+        owner_id=user.id,
+        name=name.strip(),
+        description=description,
+        unit=unit.strip(),
+        category=category or None,
+        tags=[tag.strip() for tag in tags.split(",") if tag.strip()],
+        storage_location=storage_location or None,
+        usage_context=usage_context or None,
+        notes=notes,
+        identity_key=identity_key or None,
+    )
+    db.add(item)
+    record_event(db, "canonical_item.create", "canonical_item", item.id, user)
+    db.commit()
+    return RedirectResponse(f"/items/{item.id}", 303)
+
+
 @router.get("/items/{canonical_item_id}")
 def canonical_item_page(request: Request, db: Db, user: CurrentUser, canonical_item_id: str):
     item = db.get(CanonicalItem, canonical_item_id)

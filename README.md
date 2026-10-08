@@ -143,6 +143,17 @@ Production secret recommendations:
 
 ## Backup and restore
 
+### Admin JSON export and import
+
+The **Administration** page provides an application-data JSON export and a replacement import.
+The export includes users, lists, canonical items, list placements, shares, dependencies, and
+export profiles. It deliberately excludes password hashes, password-reset tokens, audit history,
+and application settings.
+
+Importing requires typing `REPLACE`, retains the active administrator account, and replaces the
+exported data categories. Local users must reset their passwords after import. Protect exports as
+sensitive data because they contain user email addresses and private list content.
+
 ### PostgreSQL
 
 ```bash

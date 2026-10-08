@@ -8,6 +8,31 @@ def test_home_page_renders_lists(client, admin_headers):
     assert "<h1>Your lists</h1>" in response.text
 
 
+def test_items_page_creates_canonical_item(client, admin_headers):
+    page = client.get("/items", headers=admin_headers)
+    csrf_token = re.search(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
+
+    response = client.post(
+        "/items",
+        headers=admin_headers,
+        data={
+            "csrf_token": csrf_token,
+            "name": "Tent",
+            "unit": "each",
+            "category": "Shelter",
+            "tags": "camping, lightweight",
+            "storage_location": "Garage",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    details = client.get(response.headers["location"], headers=admin_headers)
+    assert "<h1>Tent</h1>" in details.text
+    assert "Shelter" in details.text
+    assert "camping, lightweight" in details.text
+
+
 def test_items_page_links_to_details_and_edits_canonical_item(client, admin_headers):
     list_data = client.post(
         "/api/v1/lists", headers=admin_headers, json={"name": "Groceries"}
