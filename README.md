@@ -87,9 +87,15 @@ python scripts/import_items_csv.py scripts/import_items_example.csv --owner admi
 python scripts/import_items_csv.py scripts/import_items_example.csv --owner admin
 ```
 
-The importer creates canonical items only; it never updates existing items. For the selected
-owner, it skips a row when its `identity_key` already exists. Rows without an `identity_key` are
-skipped when an item with the same case-insensitive name and unit already exists.
+The importer never updates existing items or lists. For the selected owner, it skips a row when
+its `identity_key` already exists. Rows without an `identity_key` are skipped when an item with
+the same case-insensitive name and unit already exists.
+
+Set `list_name` to add an item to a list. The importer adds the item to one exact
+case-insensitive matching list owned by the selected user, or creates that list when it does not
+exist. `list_description` and `list_visibility` (`private`, `shared`, `unlisted`, or `public`)
+are used only when creating the list. Use `quantity`, `packing_spot`, and `is_required` for
+list-specific placement data. A canonical item is added to a given list only once.
 
 Reset Containers:
 

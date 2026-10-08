@@ -1,4 +1,4 @@
-name,description,unit,category,tags,storage_location,usage_context,notes,identity_key
-Tent,Two-person backpacking tent,each,Shelter,"camping, lightweight",Garage,Backpacking,Check poles before trips,tent-two-person
-Water bottle,Insulated 750 ml bottle,each,Hydration,"camping, reusable",Kitchen,Day hikes,,water-bottle-750
-Headlamp,Rechargeable headlamp,each,Lighting,"camping, electronics",Gear bin,Overnight trips,Charge before packing,headlamp-rechargeable
+name,description,unit,category,tags,storage_location,usage_context,notes,identity_key,list_name,list_description,list_visibility,quantity,packing_spot,is_required
+Tent,Two-person backpacking tent,each,Shelter,"camping, lightweight",Garage,Backpacking,Check poles before trips,tent-two-person,Weekend camping,Items for a two-night campout,private,1,Shelter bag,true
+Water bottle,Insulated 750 ml bottle,each,Hydration,"camping, reusable",Kitchen,Day hikes,,water-bottle-750,Weekend camping,,,2,Side pocket,true
+Headlamp,Rechargeable headlamp,each,Lighting,"camping, electronics",Gear bin,Overnight trips,Charge before packing,headlamp-rechargeable,,,,,

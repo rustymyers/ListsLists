@@ -57,7 +57,10 @@ def main() -> int:
     mode = "Would create" if args.dry_run else "Created"
     print(
         f"{mode} {result.created} item(s); "
-        f"skipped {result.skipped} existing or duplicate row(s)."
+        f"skipped {result.skipped} existing item row(s); "
+        f"created {result.lists_created} list(s); "
+        f"added {result.placements_created} list placement(s); "
+        f"skipped {result.placements_skipped} existing placement(s)."
     )
     return 0
 
