@@ -6,6 +6,26 @@ def test_home_page_renders_lists(client, admin_headers):
 
     assert response.status_code == 200
     assert "<h1>Your lists</h1>" in response.text
+    assert 'hx-get="/"' in response.text
+    assert 'hx-trigger="input changed delay:250ms, search"' in response.text
+
+
+def test_home_page_search_updates_list_results(client, admin_headers):
+    client.post(
+        "/api/v1/lists", headers=admin_headers, json={"name": "Camping equipment"}
+    )
+    client.post("/api/v1/lists", headers=admin_headers, json={"name": "Pantry"})
+
+    response = client.get(
+        "/",
+        params={"q": "camping"},
+        headers={**admin_headers, "HX-Request": "true"},
+    )
+
+    assert response.status_code == 200
+    assert 'id="list-results"' in response.text
+    assert "Camping equipment" in response.text
+    assert "Pantry" not in response.text
 
 
 def test_items_page_creates_canonical_item(client, admin_headers):
@@ -31,6 +51,30 @@ def test_items_page_creates_canonical_item(client, admin_headers):
     assert "<h1>Tent</h1>" in details.text
     assert "Shelter" in details.text
     assert "camping, lightweight" in details.text
+
+
+def test_items_page_search_updates_item_results(client, admin_headers):
+    for name in ("Tent", "Pan"):
+        page = client.get("/items", headers=admin_headers)
+        csrf_token = re.search(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
+        response = client.post(
+            "/items",
+            headers=admin_headers,
+            data={"csrf_token": csrf_token, "name": name, "unit": "each"},
+            follow_redirects=False,
+        )
+        assert response.status_code == 303
+
+    response = client.get(
+        "/items",
+        params={"q": "tent"},
+        headers={**admin_headers, "HX-Request": "true"},
+    )
+
+    assert response.status_code == 200
+    assert 'id="item-results"' in response.text
+    assert "Tent" in response.text
+    assert "Pan" not in response.text
 
 
 def test_items_page_links_to_details_and_edits_canonical_item(client, admin_headers):

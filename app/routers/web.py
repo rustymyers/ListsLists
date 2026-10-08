@@ -52,6 +52,8 @@ def home(request: Request, db: Db, user: OptionalUser, q: str | None = None):
     if q:
         stmt = stmt.where(or_(ListModel.name.ilike(f"%{q}%"), ListModel.description.ilike(f"%{q}%")))
     lists = db.scalars(stmt.order_by(ListModel.updated_at.desc())).all()
+    if request.headers.get("HX-Request"):
+        return render(request, "list_cards.html", {"lists": lists})
     notice = db.get(AppSetting, "site_notice")
     return render(
         request,
@@ -71,6 +73,8 @@ def item_management(request: Request, db: Db, user: CurrentUser, q: str | None =
             )
         )
     items = db.scalars(stmt.order_by(CanonicalItem.name)).all()
+    if request.headers.get("HX-Request"):
+        return render(request, "item_cards.html", {"items": items})
     return render(request, "items.html", {"items": items, "q": q or "", "user": user})
 
 

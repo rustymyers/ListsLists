@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% block content %}
 <div class="heading"><div><h1>Your lists</h1><p>Create small reusable lists, then compose them safely.</p></div><a class="button" href="/lists/new">New list</a></div>
 {% if site_notice %}<div class="notice">{{ site_notice }}</div>{% endif %}
-<form class="search"><input name="q" value="{{ q }}" placeholder="Search lists"><button>Search</button></form>
-<div class="grid">{% for list in lists %}<article class="card"><span class="pill">{{ list.visibility.value }}</span><h2><a href="/l/{{ list.slug }}">{{ list.name }}</a></h2><p>{{ list.description or "No description" }}</p><small>Updated {{ list.updated_at.strftime('%Y-%m-%d %H:%M') }}</small></article>{% else %}<div class="empty">No lists found.</div>{% endfor %}</div>
+<form class="search" action="/" method="get"><input name="q" value="{{ q }}" placeholder="Search lists" hx-get="/" hx-include="closest form" hx-target="#list-results" hx-swap="outerHTML" hx-trigger="input changed delay:250ms, search"><button>Search</button></form>
+{% include "list_cards.html" %}
 {% endblock %}
