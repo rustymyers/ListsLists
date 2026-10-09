@@ -27,6 +27,7 @@ class ResolvedItem:
     usage_context: str | None
     is_required: bool
     notes: str
+    packing_spots: list[str] = field(default_factory=list)
     source_list_ids: list[str] = field(default_factory=list)
     source_item_ids: list[str] = field(default_factory=list)
     custom_metadata: dict[str, Any] = field(default_factory=dict)
@@ -102,6 +103,7 @@ class ListResolver:
             usage_context=item.usage_context,
             is_required=item.is_required,
             notes=item.notes,
+            packing_spots=[item.packing_spot] if item.packing_spot else [],
             source_list_ids=[list_id],
             source_item_ids=[item.id],
             custom_metadata=dict(item.custom_metadata),
@@ -129,6 +131,9 @@ class ListResolver:
                     raise HTTPException(409, detail="Cannot combine duplicate quantities with different units")
                 existing.quantity += row.quantity
             existing.tags = list(dict.fromkeys(existing.tags + row.tags))
+            existing.packing_spots = list(
+                dict.fromkeys(existing.packing_spots + row.packing_spots)
+            )
             existing.source_list_ids = list(dict.fromkeys(existing.source_list_ids + row.source_list_ids))
             existing.source_item_ids = list(dict.fromkeys(existing.source_item_ids + row.source_item_ids))
             existing.is_required = existing.is_required or row.is_required
@@ -164,11 +169,12 @@ def export_json(rows: list[ResolvedItem], list_obj: ListModel) -> bytes:
 
 def export_csv(rows: list[ResolvedItem]) -> bytes:
     output = io.StringIO()
-    fields = ["identity", "name", "description", "quantity", "unit", "category", "tags", "storage_location", "usage_context", "is_required", "notes", "source_list_ids", "source_item_ids", "custom_metadata"]
+    fields = ["identity", "name", "description", "quantity", "unit", "category", "tags", "storage_location", "usage_context", "is_required", "notes", "packing_spots", "source_list_ids", "source_item_ids", "custom_metadata"]
     writer = csv.DictWriter(output, fieldnames=fields)
     writer.writeheader()
     for data in rows_as_dicts(rows):
         data["tags"] = ";".join(data["tags"])
+        data["packing_spots"] = ";".join(data["packing_spots"])
         data["source_list_ids"] = ";".join(data["source_list_ids"])
         data["source_item_ids"] = ";".join(data["source_item_ids"])
         data["custom_metadata"] = json.dumps(data["custom_metadata"], separators=(",", ":"))

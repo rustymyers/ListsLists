@@ -86,7 +86,7 @@ def test_preview_shows_source_list_names_not_ids(client, admin_headers):
     client.post(
         f"/api/v1/lists/{list_data['id']}/items",
         headers=admin_headers,
-        json={"name": "Tent"},
+        json={"name": "Tent", "packing_spot": "Green duffel"},
     )
 
     preview = client.get(f"/l/{list_data['slug']}/preview", headers=admin_headers)
@@ -96,7 +96,9 @@ def test_preview_shows_source_list_names_not_ids(client, admin_headers):
     assert list_data["id"] not in preview.text
     assert 'class="sort-header" type="button" data-sort-key="name"' in preview.text
     assert 'class="sort-header" type="button" data-sort-key="quantity"' in preview.text
+    assert 'class="sort-header" type="button" data-sort-key="packing-spots"' in preview.text
     assert 'class="sort-header" type="button" data-sort-key="source-lists"' in preview.text
+    assert "Green duffel" in preview.text
 
 
 def test_items_page_creates_canonical_item(client, admin_headers):
@@ -166,6 +168,18 @@ def test_item_table_view_is_sortable_and_includes_item_details(client, admin_hea
             "custom_metadata": {"brand": "Example"},
         },
     ).json()
+    list_data = client.post(
+        "/api/v1/lists", headers=admin_headers, json={"name": "Camping"}
+    ).json()
+    client.post(
+        f"/api/v1/lists/{list_data['id']}/items",
+        headers=admin_headers,
+        json={
+            "canonical_item_id": item["id"],
+            "name": "Tent",
+            "packing_spot": "Blue bin",
+        },
+    )
 
     response = client.get("/items", params={"view": "table"}, headers=admin_headers)
 
@@ -174,6 +188,8 @@ def test_item_table_view_is_sortable_and_includes_item_details(client, admin_hea
     assert "Two-person shelter" in response.text
     assert "Conditional requirements" in response.text
     assert "Custom metadata" in response.text
+    assert "Packing spot(s)" in response.text
+    assert "Blue bin" in response.text
     assert 'class="sort-header" type="button" data-sort-key="identity-key"' in response.text
 
     search = client.get(
@@ -299,6 +315,7 @@ def test_list_page_shows_drag_handles_for_editors(client, admin_headers):
     assert 'class="drag-handle"' in page.text
     assert 'class="sort-header" type="button" data-sort-key="name"' in page.text
     assert 'class="sort-header" type="button" data-sort-key="quantity"' in page.text
+    assert 'class="sort-header" type="button" data-sort-key="packing-spot"' in page.text
 
 
 def test_web_add_item_returns_and_persists_item_row(client, admin_headers):

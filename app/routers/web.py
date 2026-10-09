@@ -61,6 +61,31 @@ def catalog_view(
     return requested_view
 
 
+def packing_spots_by_canonical_item(
+    db: Db, user: User, items: list[CanonicalItem]
+) -> dict[str, list[str]]:
+    if not items:
+        return {}
+    placements = db.scalars(
+        select(ListItem)
+        .where(ListItem.canonical_item_id.in_([item.id for item in items]))
+        .options(selectinload(ListItem.list))
+    ).all()
+    spots: dict[str, set[str]] = {}
+    for placement in placements:
+        if (
+            placement.packing_spot
+            and placement.list
+            and can_view(db, user, placement.list, allow_unlisted=False)
+        ):
+            spots.setdefault(placement.canonical_item_id, set()).add(
+                placement.packing_spot
+            )
+    return {
+        item_id: sorted(values, key=str.lower) for item_id, values in spots.items()
+    }
+
+
 @router.get("/")
 def home(
     request: Request,
@@ -115,12 +140,23 @@ def item_management(
             )
         )
     items = db.scalars(stmt.order_by(CanonicalItem.name)).all()
+    packing_spots = packing_spots_by_canonical_item(db, user, items)
     if request.headers.get("HX-Request"):
-        return render(request, "item_cards.html", {"items": items, "view": view})
+        return render(
+            request,
+            "item_cards.html",
+            {"items": items, "packing_spots": packing_spots, "view": view},
+        )
     return render(
         request,
         "items.html",
-        {"items": items, "q": q or "", "view": view, "user": user},
+        {
+            "items": items,
+            "packing_spots": packing_spots,
+            "q": q or "",
+            "view": view,
+            "user": user,
+        },
     )
 
 

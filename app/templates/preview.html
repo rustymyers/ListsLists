@@ -19,6 +19,7 @@
         <tr>
           <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="name">Item</button></th>
           <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="quantity">Quantity</button></th>
+          <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="packing-spots">Packing spot(s)</button></th>
           <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="category">Category</button></th>
           <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="location">Location</button></th>
           <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="source-lists">Source list(s)</button></th>
@@ -30,6 +31,7 @@
         <tr data-item-id="{{ loop.index }}">
           <td data-sort-key="name" data-sort-value="{{ row.name|lower }}"><strong>{{ row.name }}</strong><small>{{ row.notes }}</small></td>
           <td data-sort-key="quantity" data-sort-value="{{ row.quantity }}">{{ row.quantity }} {{ row.unit }}</td>
+          <td data-sort-key="packing-spots" data-sort-value="{{ row.packing_spots|join(' ')|lower }}">{{ row.packing_spots|join(', ') }}</td>
           <td data-sort-key="category" data-sort-value="{{ (row.category or '')|lower }}">{{ row.category or '' }}</td>
           <td data-sort-key="location" data-sort-value="{{ (row.storage_location or '')|lower }}">{{ row.storage_location or '' }}</td>
           <td data-sort-key="source-lists" data-sort-value="{{ preview_row.source_list_names|join(' ')|lower }}">{{ preview_row.source_list_names|join(', ') }}</td>

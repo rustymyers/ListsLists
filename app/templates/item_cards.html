@@ -9,6 +9,7 @@
         <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="unit">Unit</button></th>
         <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="category">Category</button></th>
         <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="tags">Tags</button></th>
+        <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="packing-spots">Packing spot(s)</button></th>
         <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="storage-location">Storage location</button></th>
         <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="usage-context">Usage context</button></th>
         <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="notes">Notes</button></th>
@@ -27,6 +28,7 @@
         <td data-sort-key="unit" data-sort-value="{{ item.unit|lower }}">{{ item.unit }}</td>
         <td data-sort-key="category" data-sort-value="{{ (item.category or '')|lower }}">{{ item.category or '' }}</td>
         <td data-sort-key="tags" data-sort-value="{{ item.tags|join(' ')|lower }}">{{ item.tags|join(', ') }}</td>
+        <td data-sort-key="packing-spots" data-sort-value="{{ packing_spots.get(item.id, [])|join(' ')|lower }}">{{ packing_spots.get(item.id, [])|join(', ') }}</td>
         <td data-sort-key="storage-location" data-sort-value="{{ (item.storage_location or '')|lower }}">{{ item.storage_location or '' }}</td>
         <td data-sort-key="usage-context" data-sort-value="{{ (item.usage_context or '')|lower }}">{{ item.usage_context or '' }}</td>
         <td data-sort-key="notes" data-sort-value="{{ item.notes|lower }}">{{ item.notes }}</td>
@@ -37,7 +39,7 @@
         <td data-sort-key="updated" data-sort-value="{{ item.updated_at.isoformat() }}">{{ item.updated_at.strftime('%Y-%m-%d %H:%M') }}</td>
       </tr>
       {% else %}
-      <tr><td class="empty" colspan="13">No items found.</td></tr>
+      <tr><td class="empty" colspan="14">No items found.</td></tr>
       {% endfor %}
     </tbody>
   </table>
