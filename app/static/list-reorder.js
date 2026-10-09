@@ -35,7 +35,7 @@
       header.closest("th").ariaSort =
         header === button ? (direction === "asc" ? "ascending" : "descending") : "none";
     });
-    setStatus(`Items sorted by ${button.textContent} in ${direction}ending order.`);
+    setStatus(`Table sorted by ${button.textContent} in ${direction}ending order.`);
   });
 
   document.addEventListener("dragstart", (event) => {

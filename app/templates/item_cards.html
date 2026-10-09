@@ -1,1 +1,47 @@
+{% if view == "table" %}
+<div id="item-results" class="table-wrap">
+  <p id="reorder-status" class="reorder-status" role="status" aria-live="polite"></p>
+  <table>
+    <thead>
+      <tr>
+        <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="name">Name</button></th>
+        <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="description">Description</button></th>
+        <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="unit">Unit</button></th>
+        <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="category">Category</button></th>
+        <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="tags">Tags</button></th>
+        <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="storage-location">Storage location</button></th>
+        <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="usage-context">Usage context</button></th>
+        <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="notes">Notes</button></th>
+        <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="identity-key">Identity key</button></th>
+        <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="requirements">Conditional requirements</button></th>
+        <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="metadata">Custom metadata</button></th>
+        <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="created">Created</button></th>
+        <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="updated">Updated</button></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr data-item-id="{{ item.id }}">
+        <td data-sort-key="name" data-sort-value="{{ item.name|lower }}"><a href="/items/{{ item.id }}"><strong>{{ item.name }}</strong></a></td>
+        <td data-sort-key="description" data-sort-value="{{ item.description|lower }}">{{ item.description }}</td>
+        <td data-sort-key="unit" data-sort-value="{{ item.unit|lower }}">{{ item.unit }}</td>
+        <td data-sort-key="category" data-sort-value="{{ (item.category or '')|lower }}">{{ item.category or '' }}</td>
+        <td data-sort-key="tags" data-sort-value="{{ item.tags|join(' ')|lower }}">{{ item.tags|join(', ') }}</td>
+        <td data-sort-key="storage-location" data-sort-value="{{ (item.storage_location or '')|lower }}">{{ item.storage_location or '' }}</td>
+        <td data-sort-key="usage-context" data-sort-value="{{ (item.usage_context or '')|lower }}">{{ item.usage_context or '' }}</td>
+        <td data-sort-key="notes" data-sort-value="{{ item.notes|lower }}">{{ item.notes }}</td>
+        <td data-sort-key="identity-key" data-sort-value="{{ (item.identity_key or '')|lower }}">{{ item.identity_key or '' }}</td>
+        <td data-sort-key="requirements" data-sort-value="{{ item.conditional_requirements|tojson }}">{{ item.conditional_requirements|tojson }}</td>
+        <td data-sort-key="metadata" data-sort-value="{{ item.custom_metadata|tojson }}">{{ item.custom_metadata|tojson }}</td>
+        <td data-sort-key="created" data-sort-value="{{ item.created_at.isoformat() }}">{{ item.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td data-sort-key="updated" data-sort-value="{{ item.updated_at.isoformat() }}">{{ item.updated_at.strftime('%Y-%m-%d %H:%M') }}</td>
+      </tr>
+      {% else %}
+      <tr><td class="empty" colspan="13">No items found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
 <div id="item-results" class="grid">{% for item in items %}<article class="card"><h2><a href="/items/{{ item.id }}">{{ item.name }}</a></h2><p>{{ item.description or "No description" }}</p><p><span class="pill">{{ item.unit }}</span>{% if item.category %} <span class="pill">{{ item.category }}</span>{% endif %}</p><small>{{ item.storage_location or "No storage location" }}</small></article>{% else %}<div class="empty">No items found.</div>{% endfor %}</div>
+{% endif %}

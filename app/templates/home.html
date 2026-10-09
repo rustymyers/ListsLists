@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% block content %}
-<div class="heading"><div><h1>Your lists</h1><p>Create small reusable lists, then compose them safely.</p></div><a class="button" href="/lists/new">New list</a></div>
+<div class="heading"><div><h1>Your lists</h1><p>Create small reusable lists, then compose them safely.</p></div><div class="actions"><form method="get" action="/"><input type="hidden" name="q" value="{{ q }}">{% if view == "cards" %}<button class="secondary" name="view" value="table">Table view</button>{% else %}<button class="secondary" name="view" value="cards">Card view</button>{% endif %}</form><a class="button" href="/lists/new">New list</a></div></div>
 {% if site_notice %}<div class="notice">{{ site_notice }}</div>{% endif %}
-<form class="search" action="/" method="get"><input name="q" value="{{ q }}" placeholder="Search lists" hx-get="/" hx-include="closest form" hx-target="#list-results" hx-swap="outerHTML" hx-trigger="input changed delay:250ms, search"><button>Search</button></form>
+<form class="search" action="/" method="get"><input type="hidden" name="view" value="{{ view }}"><input name="q" value="{{ q }}" placeholder="Search lists" hx-get="/" hx-include="closest form" hx-target="#list-results" hx-swap="outerHTML" hx-trigger="input changed delay:250ms, search"><button>Search</button></form>
 {% include "list_cards.html" %}
 {% endblock %}

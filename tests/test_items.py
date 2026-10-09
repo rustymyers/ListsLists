@@ -28,6 +28,57 @@ def test_home_page_search_updates_list_results(client, admin_headers):
     assert "Pantry" not in response.text
 
 
+def test_list_table_view_is_sortable_and_includes_list_details(client, admin_headers):
+    client.post(
+        "/api/v1/lists",
+        headers=admin_headers,
+        json={
+            "name": "Camping equipment",
+            "description": "Equipment for trips",
+            "visibility": "shared",
+        },
+    )
+
+    response = client.get("/", params={"view": "table"}, headers=admin_headers)
+
+    assert response.status_code == 200
+    assert "Card view" in response.text
+    assert "Equipment for trips" in response.text
+    assert "Default sort" in response.text
+    assert "Custom metadata" in response.text
+    assert 'class="sort-header" type="button" data-sort-key="updated"' in response.text
+
+    search = client.get(
+        "/",
+        params={"q": "camping", "view": "table"},
+        headers={**admin_headers, "HX-Request": "true"},
+    )
+    assert 'id="list-results" class="table-wrap"' in search.text
+    assert "Camping equipment" in search.text
+
+    item_catalog = client.get("/items", headers=admin_headers)
+    assert "Table view" in item_catalog.text
+    assert 'id="item-results" class="grid"' in item_catalog.text
+
+    card_view = client.get("/", params={"view": "cards"}, headers=admin_headers)
+    assert "Table view" in card_view.text
+    assert 'id="list-results" class="grid"' in card_view.text
+
+    item_catalog = client.get("/items", headers=admin_headers)
+    assert "Table view" in item_catalog.text
+    assert 'id="item-results" class="grid"' in item_catalog.text
+
+    item_table_view = client.get(
+        "/items", params={"view": "table"}, headers=admin_headers
+    )
+    assert "Card view" in item_table_view.text
+    assert 'id="item-results" class="table-wrap"' in item_table_view.text
+
+    list_catalog = client.get("/", headers=admin_headers)
+    assert "Table view" in list_catalog.text
+    assert 'id="list-results" class="grid"' in list_catalog.text
+
+
 def test_preview_shows_source_list_names_not_ids(client, admin_headers):
     list_data = client.post(
         "/api/v1/lists", headers=admin_headers, json={"name": "Camping"}
@@ -95,6 +146,43 @@ def test_items_page_search_updates_item_results(client, admin_headers):
     assert 'id="item-results"' in response.text
     assert "Tent" in response.text
     assert "Pan" not in response.text
+
+
+def test_item_table_view_is_sortable_and_includes_item_details(client, admin_headers):
+    item = client.post(
+        "/api/v1/canonical-items",
+        headers=admin_headers,
+        json={
+            "name": "Tent",
+            "description": "Two-person shelter",
+            "unit": "each",
+            "category": "Shelter",
+            "tags": ["camping", "lightweight"],
+            "storage_location": "Garage",
+            "usage_context": "Camping",
+            "notes": "Inspect before travel",
+            "identity_key": "tent-2p",
+            "conditional_requirements": {"weather": "rain"},
+            "custom_metadata": {"brand": "Example"},
+        },
+    ).json()
+
+    response = client.get("/items", params={"view": "table"}, headers=admin_headers)
+
+    assert response.status_code == 200
+    assert f'href="/items/{item["id"]}"' in response.text
+    assert "Two-person shelter" in response.text
+    assert "Conditional requirements" in response.text
+    assert "Custom metadata" in response.text
+    assert 'class="sort-header" type="button" data-sort-key="identity-key"' in response.text
+
+    search = client.get(
+        "/items",
+        params={"q": "tent", "view": "table"},
+        headers={**admin_headers, "HX-Request": "true"},
+    )
+    assert 'id="item-results" class="table-wrap"' in search.text
+    assert "Tent" in search.text
 
 
 def test_items_page_links_to_details_and_edits_canonical_item(client, admin_headers):

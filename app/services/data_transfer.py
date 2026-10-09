@@ -51,6 +51,8 @@ def export_backup(session: Session) -> bytes:
             "is_admin": user.is_admin,
             "is_active": user.is_active,
             "auth_source": user.auth_source,
+            "list_view": user.list_view,
+            "item_view": user.item_view,
             "created_at": _timestamp(user.created_at),
             "updated_at": _timestamp(user.updated_at),
         }
@@ -160,6 +162,8 @@ def import_backup(session: Session, payload: Any, current_user_id: str) -> None:
                 is_active=row["is_active"],
                 must_change_password=row.get("auth_source", "local") == "local",
                 auth_source=row.get("auth_source", "local"),
+                list_view=row.get("list_view", row.get("catalog_view", "cards")),
+                item_view=row.get("item_view", row.get("catalog_view", "cards")),
                 created_at=_parse_timestamp(row.get("created_at")),
                 updated_at=_parse_timestamp(row.get("updated_at")),
             )

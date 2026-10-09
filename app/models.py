@@ -41,6 +41,8 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
     auth_source: Mapped[str] = mapped_column(String(20), default="local")
+    list_view: Mapped[str] = mapped_column(String(10), default="cards")
+    item_view: Mapped[str] = mapped_column(String(10), default="cards")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 

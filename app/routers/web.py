@@ -45,10 +45,33 @@ def render(request: Request, template: str, context: dict):
     return request.app.state.templates.TemplateResponse(request, template, context)
 
 
+def catalog_view(
+    db: Db,
+    user: User,
+    preference_name: str,
+    requested_view: str | None,
+) -> str:
+    if requested_view is None:
+        return getattr(user, preference_name)
+    if requested_view not in {"cards", "table"}:
+        raise HTTPException(422, detail="View must be cards or table")
+    if getattr(user, preference_name) != requested_view:
+        setattr(user, preference_name, requested_view)
+        db.commit()
+    return requested_view
+
+
 @router.get("/")
-def home(request: Request, db: Db, user: OptionalUser, q: str | None = None):
+def home(
+    request: Request,
+    db: Db,
+    user: OptionalUser,
+    q: str | None = None,
+    view: str | None = None,
+):
     if not user:
         return RedirectResponse("/login", 303)
+    view = catalog_view(db, user, "list_view", view)
     shared_ids = select(ListShare.list_id).where(ListShare.user_id == user.id)
     stmt = select(ListModel).where(
         ListModel.deleted_at.is_(None), ListModel.archived.is_(False),
@@ -59,17 +82,30 @@ def home(request: Request, db: Db, user: OptionalUser, q: str | None = None):
         stmt = stmt.where(or_(ListModel.name.ilike(f"%{q}%"), ListModel.description.ilike(f"%{q}%")))
     lists = db.scalars(stmt.order_by(ListModel.updated_at.desc())).all()
     if request.headers.get("HX-Request"):
-        return render(request, "list_cards.html", {"lists": lists})
+        return render(request, "list_cards.html", {"lists": lists, "view": view})
     notice = db.get(AppSetting, "site_notice")
     return render(
         request,
         "home.html",
-        {"lists": lists, "q": q or "", "user": user, "site_notice": notice.value if notice else ""},
+        {
+            "lists": lists,
+            "q": q or "",
+            "view": view,
+            "user": user,
+            "site_notice": notice.value if notice else "",
+        },
     )
 
 
 @router.get("/items")
-def item_management(request: Request, db: Db, user: CurrentUser, q: str | None = None):
+def item_management(
+    request: Request,
+    db: Db,
+    user: CurrentUser,
+    q: str | None = None,
+    view: str | None = None,
+):
+    view = catalog_view(db, user, "item_view", view)
     stmt = select(CanonicalItem).where(CanonicalItem.owner_id == user.id)
     if q:
         stmt = stmt.where(
@@ -80,8 +116,12 @@ def item_management(request: Request, db: Db, user: CurrentUser, q: str | None =
         )
     items = db.scalars(stmt.order_by(CanonicalItem.name)).all()
     if request.headers.get("HX-Request"):
-        return render(request, "item_cards.html", {"items": items})
-    return render(request, "items.html", {"items": items, "q": q or "", "user": user})
+        return render(request, "item_cards.html", {"items": items, "view": view})
+    return render(
+        request,
+        "items.html",
+        {"items": items, "q": q or "", "view": view, "user": user},
+    )
 
 
 @router.post("/items")

@@ -1,1 +1,35 @@
+{% if view == "table" %}
+<div id="list-results" class="table-wrap">
+  <p id="reorder-status" class="reorder-status" role="status" aria-live="polite"></p>
+  <table>
+    <thead>
+      <tr>
+        <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="name">Name</button></th>
+        <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="description">Description</button></th>
+        <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="visibility">Visibility</button></th>
+        <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="default-sort">Default sort</button></th>
+        <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="metadata">Custom metadata</button></th>
+        <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="created">Created</button></th>
+        <th aria-sort="none"><button class="sort-header" type="button" data-sort-key="updated">Updated</button></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for list in lists %}
+      <tr data-item-id="{{ list.id }}">
+        <td data-sort-key="name" data-sort-value="{{ list.name|lower }}"><a href="/l/{{ list.slug }}"><strong>{{ list.name }}</strong></a></td>
+        <td data-sort-key="description" data-sort-value="{{ list.description|lower }}">{{ list.description }}</td>
+        <td data-sort-key="visibility" data-sort-value="{{ list.visibility.value }}">{{ list.visibility.value }}</td>
+        <td data-sort-key="default-sort" data-sort-value="{{ list.default_sort|tojson }}">{{ list.default_sort|tojson }}</td>
+        <td data-sort-key="metadata" data-sort-value="{{ list.custom_metadata|tojson }}">{{ list.custom_metadata|tojson }}</td>
+        <td data-sort-key="created" data-sort-value="{{ list.created_at.isoformat() }}">{{ list.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td data-sort-key="updated" data-sort-value="{{ list.updated_at.isoformat() }}">{{ list.updated_at.strftime('%Y-%m-%d %H:%M') }}</td>
+      </tr>
+      {% else %}
+      <tr><td class="empty" colspan="7">No lists found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
 <div id="list-results" class="grid">{% for list in lists %}<article class="card"><span class="pill">{{ list.visibility.value }}</span><h2><a href="/l/{{ list.slug }}">{{ list.name }}</a></h2><p>{{ list.description or "No description" }}</p><small>Updated {{ list.updated_at.strftime('%Y-%m-%d %H:%M') }}</small></article>{% else %}<div class="empty">No lists found.</div>{% endfor %}</div>
+{% endif %}
